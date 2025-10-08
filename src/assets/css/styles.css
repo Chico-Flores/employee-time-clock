@@ -87,10 +87,6 @@ body {
   background-color: #0056b3;
 }
 
-.action-buttons button:hover {
-  background-color: #0056b3;
-}
-
 #currentTime {
   margin-bottom: 1em;
 }
