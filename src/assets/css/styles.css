@@ -1,113 +1,323 @@
+/* PowerHouze Group Time Clock - Modern Design */
+
+* {
+  box-sizing: border-box;
+}
+
 html,
-body,
-canvas {
+body {
   width: 100%;
   height: 100%;
   margin: 0;
   padding: 0;
-  text-align: center;
-  overflow: hidden;
-  transition: all 0.3s ease;
+  overflow-x: hidden;
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
 }
 
 body {
-  overflow-y: scroll !important;
+  background: linear-gradient(135deg, #1e3a8a 0%, #2563eb 50%, #3b82f6 100%);
+  overflow-y: auto !important;
+  min-height: 100vh;
 }
 
 .time-clock-container {
-  font-family: Arial, sans-serif;
-  height: 100%;
-  width: 100%;
-  margin-top: 4em;
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 2rem;
+  min-height: 100vh;
 }
 
 .time-clock-container:focus {
   outline: none;
 }
 
-.main-container {
-  display: inline-flex;
-  align-items: center;
-  text-align: center;
-  height: 100%;
-  justify-content: space-between;
-}
-
-.keypad-container {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  width: 200px;
-  margin: 2em auto;
-  justify-content: center;
-}
-
-.keypad-button {
-  width: 50px;
-  height: 50px;
-  font-size: 20px;
-  margin: 5px;
-  border: 2px solid #888;
-  background-color: #f0f0f0;
-  cursor: pointer;
-  transition: all 0.3s ease;
-  border-radius: 10px;
-  box-shadow: 0px 0px 5px rgba(0, 0, 0, 0.1);
-}
-
-.keypad-button:hover {
-  background-color: #ddd;
-  transform: scale(1.1);
-}
-
-.action-buttons {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-  grid-auto-flow: column;
-  grid-template-rows: repeat(4, auto);
-  gap: 10px;
-  max-width: 800px;
-  margin: 20px auto;
-  justify-content: center;
-}
-
-.action-buttons button {
-  display: block;
-  padding: 10px 20px;
-  background-color: #007bff;
+/* Header Section */
+.time-clock-container > h1 {
   color: white;
-  border: none;
-  cursor: pointer;
-  transition: background-color 0.3s;
-  border-radius: 5px;
-  box-shadow: 0px 0px 5px rgba(0, 0, 0, 0.1);
-  white-space: nowrap;
+  font-size: 2.5rem;
+  font-weight: 700;
+  text-align: center;
+  margin-bottom: 0.5rem;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 15px;
 }
 
-.action-buttons button:hover {
-  background-color: #0056b3;
+.time-clock-container > h1::before {
+  content: '⚡';
+  font-size: 3rem;
+  color: #fbbf24;
+  animation: pulse 2s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(1.1);
+    opacity: 0.8;
+  }
 }
 
 #currentTime {
-  margin-bottom: 1em;
+  color: white;
+  font-size: 1.2rem;
+  text-align: center;
+  margin-bottom: 2rem;
+  font-weight: 500;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+/* PIN Entry Card */
+.pin-entry {
+  background: white;
+  border-radius: 20px;
+  padding: 2rem;
+  margin: 0 auto 2rem;
+  max-width: 500px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+  transition: transform 0.3s ease;
+}
+
+.pin-entry:hover {
+  transform: translateY(-5px);
 }
 
 #currentPin {
-  width: fit-content;
-  margin: auto;
-  padding: 0.5em;
-  border: solid gainsboro;
+  width: 100%;
+  margin: 0 auto 1rem;
+  padding: 1.5rem;
+  border: 3px solid #e5e7eb;
+  border-radius: 15px;
+  font-size: 1.5rem;
+  font-weight: 600;
+  color: #1e3a8a;
+  text-align: center;
+  background: #f9fafb;
+  transition: all 0.3s ease;
+  letter-spacing: 0.3em;
 }
 
-.time-card {
-  margin-block: 3em;
+#currentPin:focus-within {
+  border-color: #fbbf24;
+  box-shadow: 0 0 0 4px rgba(251, 191, 36, 0.2);
+}
+
+.clear-button {
+  background: linear-gradient(135deg, #ef4444, #dc2626);
+  border: none;
+  color: white;
+  padding: 12px 30px;
+  text-align: center;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  border-radius: 12px;
+  transition: all 0.3s ease;
+  box-shadow: 0 4px 12px rgba(239, 68, 68, 0.3);
   width: 100%;
 }
 
-.time-card > div {
-  display: inline-block;
-  width: fit-content + 1em;
-  margin-inline: 1em;
-  vertical-align: middle;
+.clear-button:hover {
+  background: linear-gradient(135deg, #dc2626, #b91c1c);
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(239, 68, 68, 0.4);
+}
+
+/* Main Container */
+.main-container {
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 3rem;
+  margin: 0 auto;
+  max-width: 1200px;
+  flex-wrap: wrap;
+}
+
+/* Keypad Container */
+.keypad-container {
+  background: white;
+  border-radius: 20px;
+  padding: 2rem;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 15px;
+  width: fit-content;
+}
+
+.keypad-button {
+  width: 80px;
+  height: 80px;
+  font-size: 24px;
+  font-weight: 600;
+  border: none;
+  background: linear-gradient(135deg, #1e3a8a, #2563eb);
+  color: white;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  border-radius: 15px;
+  box-shadow: 0 4px 12px rgba(30, 58, 138, 0.3);
+}
+
+.keypad-button:hover {
+  background: linear-gradient(135deg, #2563eb, #3b82f6);
+  transform: translateY(-3px) scale(1.05);
+  box-shadow: 0 8px 20px rgba(30, 58, 138, 0.4);
+}
+
+.keypad-button:active {
+  transform: translateY(0) scale(0.98);
+}
+
+/* Action Buttons */
+.action-buttons {
+  background: white;
+  border-radius: 20px;
+  padding: 2rem;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 15px;
+  max-width: 800px;
+  margin: 0 auto;
+}
+
+.action-buttons button {
+  padding: 18px 24px;
+  background: linear-gradient(135deg, #2563eb, #1e40af);
+  color: white;
+  border: none;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  border-radius: 12px;
+  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3);
+  font-size: 16px;
+  font-weight: 600;
+  white-space: nowrap;
+  position: relative;
+  overflow: hidden;
+}
+
+.action-buttons button::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 0;
+  height: 0;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.2);
+  transform: translate(-50%, -50%);
+  transition: width 0.6s, height 0.6s;
+}
+
+.action-buttons button:hover::before {
+  width: 300px;
+  height: 300px;
+}
+
+.action-buttons button:hover {
+  background: linear-gradient(135deg, #1e40af, #1e3a8a);
+  transform: translateY(-3px);
+  box-shadow: 0 8px 20px rgba(37, 99, 235, 0.4);
+}
+
+.action-buttons button:active {
+  transform: translateY(0);
+}
+
+/* Special button styling for different actions */
+.action-buttons button:nth-child(1) {
+  background: linear-gradient(135deg, #10b981, #059669);
+  box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
+}
+
+.action-buttons button:nth-child(1):hover {
+  background: linear-gradient(135deg, #059669, #047857);
+}
+
+.action-buttons button:nth-child(2) {
+  background: linear-gradient(135deg, #ef4444, #dc2626);
+  box-shadow: 0 4px 12px rgba(239, 68, 68, 0.3);
+}
+
+.action-buttons button:nth-child(2):hover {
+  background: linear-gradient(135deg, #dc2626, #b91c1c);
+}
+
+/* Message Container */
+#message-container {
+  position: fixed;
+  bottom: 2rem;
+  right: 2rem;
+  z-index: 1000;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.error-message,
+.success-message,
+.warning-message,
+.info-message {
+  padding: 16px 24px;
+  border-radius: 12px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
+  font-size: 16px;
+  font-weight: 600;
+  color: white;
+  opacity: 0;
+  transform: translateX(400px);
+  transition: all 0.4s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+}
+
+.error-message.show,
+.success-message.show,
+.warning-message.show,
+.info-message.show {
+  opacity: 1;
+  transform: translateX(0);
+}
+
+.error-message.hide,
+.success-message.hide,
+.warning-message.hide,
+.info-message.hide {
+  opacity: 0;
+  transform: translateX(400px);
+}
+
+.success-message {
+  background: linear-gradient(135deg, #10b981, #059669);
+}
+
+.error-message {
+  background: linear-gradient(135deg, #ef4444, #dc2626);
+}
+
+.warning-message {
+  background: linear-gradient(135deg, #f59e0b, #d97706);
+}
+
+.info-message {
+  background: linear-gradient(135deg, #3b82f6, #2563eb);
+}
+
+/* Time Card */
+.time-card {
+  margin: 3rem auto;
+  width: 95%;
+  max-width: 1400px;
+  background: white;
+  border-radius: 20px;
+  padding: 2rem;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
 }
 
 .time-card table {
@@ -117,22 +327,115 @@ body {
 
 .time-card th,
 .time-card td {
-  border: 1px solid #ccc;
-  padding: 8px;
+  border: none;
+  padding: 16px;
   text-align: left;
 }
 
 .time-card th {
-  background-color: #f0f0f0;
+  background: linear-gradient(135deg, #1e3a8a, #2563eb);
+  color: white;
+  font-weight: 600;
+  text-transform: uppercase;
+  font-size: 14px;
+  letter-spacing: 0.5px;
+}
+
+.time-card th:first-child {
+  border-radius: 12px 0 0 0;
+}
+
+.time-card th:last-child {
+  border-radius: 0 12px 0 0;
+}
+
+.time-card tr:nth-child(even) {
+  background: #f9fafb;
+}
+
+.time-card tr:hover {
+  background: #e0f2fe;
+  transition: background 0.2s ease;
 }
 
 hr {
-  width: 75%;
-  margin: auto;
-  color: gainsboro;
-  border: 2px solid;
+  width: 90%;
+  margin: 3rem auto;
+  border: none;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.3), transparent);
 }
 
+/* Admin Buttons */
+#loginButton {
+  display: block;
+  margin: 2rem auto;
+  padding: 16px 40px;
+  color: white;
+  font-size: 16px;
+  font-weight: 600;
+  border: none;
+  border-radius: 12px;
+  background: linear-gradient(135deg, #fbbf24, #f59e0b);
+  box-shadow: 0 4px 12px rgba(251, 191, 36, 0.4);
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+#loginButton:hover {
+  background: linear-gradient(135deg, #f59e0b, #d97706);
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(251, 191, 36, 0.5);
+}
+
+#downloadButton,
+#addEmployeeButton,
+#logoutButton {
+  position: fixed;
+  left: 1rem;
+  margin: 0;
+  padding: 14px 24px;
+  color: white;
+  font-size: 14px;
+  font-weight: 600;
+  border: none;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+}
+
+#downloadButton {
+  top: 1rem;
+  background: linear-gradient(135deg, #fbbf24, #f59e0b);
+}
+
+#downloadButton:hover {
+  background: linear-gradient(135deg, #f59e0b, #d97706);
+  transform: translateX(5px);
+}
+
+#addEmployeeButton {
+  top: 5rem;
+  background: linear-gradient(135deg, #3b82f6, #2563eb);
+}
+
+#addEmployeeButton:hover {
+  background: linear-gradient(135deg, #2563eb, #1e40af);
+  transform: translateX(5px);
+}
+
+#logoutButton {
+  top: 9rem;
+  background: linear-gradient(135deg, #6b7280, #4b5563);
+}
+
+#logoutButton:hover {
+  background: linear-gradient(135deg, #4b5563, #374151);
+  transform: translateX(5px);
+}
+
+/* Overlays */
 .login-overlay,
 .employee-overlay {
   position: fixed;
@@ -140,206 +443,129 @@ hr {
   left: 0;
   width: 100%;
   height: 100%;
-  background-color: rgba(255, 255, 255, 0.8);
+  background: rgba(30, 58, 138, 0.95);
+  backdrop-filter: blur(10px);
   display: flex;
   align-items: center;
   justify-content: center;
+  z-index: 999;
 }
 
 .login-container,
 .employee-container {
-  background-color: white;
-  padding: 20px;
-  border-radius: 10px;
-  box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+  background: white;
+  padding: 3rem;
+  border-radius: 20px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.4);
+  min-width: 400px;
+  position: relative;
 }
 
 .login-container > div,
 .employee-container > div {
-  margin-bottom: 1em;
+  margin-bottom: 1.5rem;
 }
 
 .login-container > button,
 .employee-container > button {
-  margin: 0 0.5em;
-  padding: 0.5em;
+  margin: 0.5rem;
+  padding: 12px 30px;
   border: none;
-  border-radius: 5px;
-  background-color: #3ca7ff;
+  border-radius: 12px;
+  background: linear-gradient(135deg, #2563eb, #1e40af);
   color: white;
   cursor: pointer;
-  transition: background-color 0.3s;
+  transition: all 0.3s ease;
+  font-weight: 600;
+  font-size: 15px;
 }
 
 .login-container > button:hover,
 .employee-container > button:hover {
-  background-color: #007bff;
-}
-
-.login-error,
-.employee-error {
-  color: red;
-}
-
-#loginButton {
-  display: block;
-  margin: 0 auto 2em;
-  padding: 1em;
-  color: white;
-  font-size: 12pt;
-  border: none;
-  border-radius: 5px;
-  background-color: #ff7676;
-}
-
-#loginButton:hover {
-  background-color: #ff0000;
-}
-
-#logoutButton {
-  position: fixed;
-  top: 8em;
-  left: 0;
-  margin: 1em;
-  padding: 1em;
-  color: white;
-  font-size: 11pt;
-  border: none;
-  border-radius: 5px;
-  background-color: #c5c5c5;
-}
-
-#logoutButton:hover {
-  background-color: #a7a7a7;
-}
-
-#addEmployeeButton {
-  position: fixed;
-  top: 4em;
-  left: 0;
-  margin: 1em;
-  padding: 1em;
-  color: white;
-  font-size: 11pt;
-  border: none;
-  border-radius: 5px;
-  background-color: #3ca7ff;
-}
-
-#addEmployeeButton:hover {
-  background-color: #007bff;
-}
-
-#downloadButton {
-  position: fixed;
-  top: 0;
-  left: 0;
-  margin: 1em;
-  padding: 1em;
-  color: white;
-  font-size: 11pt;
-  border: none;
-  border-radius: 5px;
-  background-color: #ff7676;
-}
-
-#downloadButton:hover {
-  background-color: #ff0000;
+  background: linear-gradient(135deg, #1e40af, #1e3a8a);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.4);
 }
 
 .close-btn {
-  position: relative;
-  float: right;
-  background-color: transparent !important;
-  color: #b1b1b1 !important;
-  padding-inline: 0.75em !important;
-  border: 2px solid #ebebeb !important;
-  font-size: 14px;
+  position: absolute;
+  top: 1rem;
+  right: 1rem;
+  background: transparent !important;
+  color: #9ca3af !important;
+  padding: 8px 16px !important;
+  border: 2px solid #e5e7eb !important;
+  font-size: 18px;
+  font-weight: bold;
 }
 
-#adminText {
-  color: #3ca7ff;
-  font-size: small;
+.close-btn:hover {
+  background: #f3f4f6 !important;
+  color: #374151 !important;
+  border-color: #d1d5db !important;
 }
 
 input[type="text"],
 input[type="password"] {
-  width: 70%;
-  padding: 0.5em;
-  border: solid gainsboro;
-  border-radius: 5px;
-  box-shadow: 0px 0px 5px rgba(0, 0, 0, 0.1);
-}
-
-#createAcc {
-  margin-bottom: 0.25em;
-}
-
-#username {
-  margin-top: 0.5em;
-}
-
-.error-message,
-.success-message,
-.warning-message,
-.info-message {
-  position: fixed;
-  bottom: 1em;
-  right: 1em;
-  padding: 10px 20px;
-  background-color: #f44336;
-  color: #ffffff;
-  border-radius: 5px;
-  box-shadow: 0px 0px 10px rgba(0, 0, 0, 0.2);
+  width: 100%;
+  padding: 14px;
+  border: 2px solid #e5e7eb;
+  border-radius: 12px;
   font-size: 16px;
-  text-align: center;
-  z-index: 1000;
-  opacity: 0;
-  margin-right: 1.5em;
-  transition: opacity 0.3s ease-in-out;
+  transition: all 0.3s ease;
 }
 
-.error-message.show,
-.success-message.show,
-.warning-message.show,
-.info-message.show {
-  opacity: 1;
+input[type="text"]:focus,
+input[type="password"]:focus {
+  outline: none;
+  border-color: #fbbf24;
+  box-shadow: 0 0 0 4px rgba(251, 191, 36, 0.1);
 }
 
-.error-message.hide,
-.success-message.hide,
-.warning-message.hide,
-.info-message.hide {
-  opacity: 0;
+#adminText {
+  color: #2563eb;
+  font-size: 14px;
+  font-weight: 600;
 }
 
-.success-message {
-  background-color: #4caf50;
+.login-error,
+.employee-error {
+  color: #ef4444;
+  font-weight: 600;
 }
 
-.warning-message {
-  background-color: #ff9800;
-}
+/* Responsive Design */
+@media (max-width: 768px) {
+  .time-clock-container {
+    padding: 1rem;
+  }
 
-.info-message {
-  background-color: #2196f3;
-}
+  .main-container {
+    flex-direction: column;
+    gap: 2rem;
+  }
 
-.clear-button {
-  background: linear-gradient(to right, #f8f9fa, #e9ecef);
-  border: none;
-  color: #333;
-  padding: 6px 8px;
-  text-align: center;
-  text-decoration: none;
-  display: inline;
-  font-size: 15px;
-  margin: 5px 0 0;
-  cursor: pointer;
-  border-radius: 5px;
-  transition: background 0.3s ease;
-}
+  .action-buttons {
+    grid-template-columns: 1fr;
+  }
 
-.clear-button:hover {
-  background: linear-gradient(to right, #e9ecef, #f8f9fa);
+  .time-clock-container > h1 {
+    font-size: 2rem;
+  }
+
+  #downloadButton,
+  #addEmployeeButton,
+  #logoutButton {
+    position: relative;
+    left: auto;
+    top: auto;
+    display: inline-block;
+    margin: 0.5rem;
+  }
+
+  .login-container,
+  .employee-container {
+    min-width: 90%;
+    padding: 2rem;
+  }
 }
