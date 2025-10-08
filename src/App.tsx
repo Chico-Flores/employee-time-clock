@@ -92,7 +92,7 @@ const App: React.FC = () => {
   }, [lastInteractionTime]);
 
   const handleKeyPress = (key: string) => {
-    if (pin.length < 6 && key.trim() !== '' && !isNaN(Number(key))) {
+    if (pin.length < 4 && key.trim() !== '' && !isNaN(Number(key))) {
       setPin(pin + key);
     }
   };
@@ -261,7 +261,7 @@ const App: React.FC = () => {
       <h1>PHG Employee Time Clock</h1>
       <div id="currentTime">{currentTime}</div>
       <div className="pin-entry">
-        <div id="currentPin">Enter PIN: {pin || '______'}</div>
+        <div id="currentPin">Enter PIN: {pin || '____'}</div>
         <button className="clear-button" onClick={handleClear}>Clear PIN</button>
       </div>
       <div id="message-container"></div>
