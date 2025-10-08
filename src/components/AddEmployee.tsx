@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 
 interface AddEmployeeProps {
@@ -12,15 +11,22 @@ const AddEmployee: React.FC<AddEmployeeProps> = ({ onAddSuccess, onCloseOverlay 
   const [error, setError] = useState('');
 
   const MIN_NAME_LENGTH = 2;
-  const PIN_LENGTH = 6;
+  const PIN_LENGTH = 4; // CHANGED FROM 6 TO 4
 
   const handleAddEmployee = async () => {
     if (name.length < MIN_NAME_LENGTH) {
       setError(`Name must be at least ${MIN_NAME_LENGTH} characters long`);
       return;
     }
+
     if (pin.length !== PIN_LENGTH) {
       setError(`PIN must be exactly ${PIN_LENGTH} digits long`);
+      return;
+    }
+
+    // Additional validation: ensure PIN contains only digits
+    if (!/^\d{4}$/.test(pin)) {
+      setError('PIN must contain only numbers');
       return;
     }
 
@@ -40,6 +46,13 @@ const AddEmployee: React.FC<AddEmployeeProps> = ({ onAddSuccess, onCloseOverlay 
       .catch((error) => setError('Error adding employee: ' + error));
   };
 
+  const handlePinChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value.replace(/\D/g, ''); // Remove non-digits
+    if (value.length <= PIN_LENGTH) {
+      setPin(value);
+    }
+  };
+
   return (
     <div className="employee-overlay">
       <div className="employee-container">
@@ -56,10 +69,12 @@ const AddEmployee: React.FC<AddEmployeeProps> = ({ onAddSuccess, onCloseOverlay 
         <div>
           <input
             type="text"
-            placeholder="PIN (6 digits)"
+            placeholder="PIN (4 digits)"
             value={pin}
-            onChange={(e) => setPin(e.target.value)}
+            onChange={handlePinChange}
             maxLength={PIN_LENGTH}
+            inputMode="numeric"
+            pattern="[0-9]{4}"
           />
         </div>
         {error && <div className="employee-error">{error}</div>}
