@@ -35,14 +35,36 @@ const HoursCalculator: React.FC = () => {
     const lines = text.trim().split('\n');
     if (lines.length === 0) return;
     
+    // Function to parse CSV line respecting quoted fields
+    const parseCsvLine = (line: string): string[] => {
+      const result: string[] = [];
+      let current = '';
+      let inQuotes = false;
+      
+      for (let i = 0; i < line.length; i++) {
+        const char = line[i];
+        
+        if (char === '"') {
+          inQuotes = !inQuotes;
+        } else if (char === ',' && !inQuotes) {
+          result.push(current.trim());
+          current = '';
+        } else {
+          current += char;
+        }
+      }
+      result.push(current.trim());
+      return result;
+    };
+    
     // Parse headers
-    const headers = lines[0].split(',').map(h => h.trim().replace(/"/g, ''));
+    const headers = parseCsvLine(lines[0]);
     
     // Parse data rows
     const data = lines.slice(1)
       .filter(line => line.trim())
       .map(line => {
-        const values = line.split(',').map(v => v.trim().replace(/"/g, ''));
+        const values = parseCsvLine(line);
         const record: any = {};
         headers.forEach((header, i) => {
           record[header] = values[i] || '';
