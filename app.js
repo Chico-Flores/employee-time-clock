@@ -173,7 +173,7 @@ if (process.env.NODE_ENV === 'production') {
     };
 } else {
     // Start the server for local development and testing
-    app.listen(port, () => {
-        console.log(`Server is running on http://localhost:${port}`);
-    });
+    app.listen(PORT, '0.0.0.0', () => {
+     console.log(`Server running on port ${PORT}`);
+   });
 }
