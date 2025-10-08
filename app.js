@@ -164,16 +164,14 @@ app.post('/add-employee', (req, res) => {
     });
 });
 
-if (process.env.NODE_ENV === 'production') {
-    // Export the app for production (e.g., when using Phusion Passenger)
-    module.exports = app;
-    module.exports.db = {
-        usersDB,
-        recordsDB
-    };
-} else {
-    // Start the server for local development and testing
-    app.listen(PORT, '0.0.0.0', () => {
-     console.log(`Server running on port ${PORT}`);
+// Always start the server
+   app.listen(PORT, '0.0.0.0', () => {
+       console.log(`Server running on port ${PORT}`);
    });
-}
+
+   // Export the app for compatibility
+   module.exports = app;
+   module.exports.db = {
+       usersDB,
+       recordsDB
+   };
