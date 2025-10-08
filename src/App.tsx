@@ -16,20 +16,17 @@ const App: React.FC = () => {
   const [currentTime, setCurrentTime] = useState(new Date().toLocaleString());
   const [showAddEmployee, setShowAddEmployee] = useState(false);
   const [timeCardRecords, setTimeCardRecords] = useState<{ id: number; name: string; pin: string; action: string; time: string; ip: string }[]>([]);
-  const [employeeStatus, setEmployeeStatus] = useState<{ [pin: string]: string }>({}); // Stores last action per employee
+  const [employeeStatus, setEmployeeStatus] = useState<{ [pin: string]: string }>({});
   const isOverlayShowing = showCreateAdmin || showLogin || showAddEmployee;
   const [lastInteractionTime, setLastInteractionTime] = useState(new Date());
 
-  // Effect to update the current time every second
   useEffect(() => {
     const timer = setInterval(() => {
       setCurrentTime(new Date().toLocaleString());
     }, 1000);
-
     return () => clearInterval(timer);
   }, []);
 
-  // Effect to check if the user is logged in
   useEffect(() => {
     fetch('/is-logged-in')
       .then((response) => response.json())
@@ -56,19 +53,16 @@ const App: React.FC = () => {
       .catch((error) => console.error('Error checking login status:', error));
   }, [setIsLoggedIn, setTimeCardRecords]);
 
-  // Focus on the time clock container when the app first loads
   useEffect(() => {
     if (!showCreateAdmin && !showLogin) {
       timeClockContainerRef.current?.focus();
     }
   }, [showCreateAdmin, showLogin]);
 
-  // Handle user interactions
   const handleInteraction = () => {
     setLastInteractionTime(new Date());
   };
 
-  // Use an effect to set up the inactivity timer and handle user interactions
   useEffect(() => {
     const logout = () => {
       fetch('/logout').then(() => {
@@ -80,7 +74,6 @@ const App: React.FC = () => {
     const logoutTimer = setTimeout(() => {
       const now = new Date();
       const timeDiff = now.getTime() - lastInteractionTime.getTime();
-
       if (timeDiff >= 30 * 60 * 1000) {
         logout();
       }
@@ -136,25 +129,24 @@ const App: React.FC = () => {
   };
 
   const handleActionClick = async (selectedAction: string) => {
-    // Flash red and exit early if no PIN is entered
     if (pin === '') {
       document.body.scrollTo(0, 0);
       let currentPin = document.getElementById('currentPin');
-      currentPin.style.borderColor = '#ff7866';
-      setTimeout(() => { currentPin.style.borderColor = 'gainsboro'; }, 250);
-      setTimeout(() => { currentPin.style.borderColor = '#ff7866'; }, 500);
-      setTimeout(() => { currentPin.style.borderColor = 'gainsboro'; }, 750);
+      if (currentPin) {
+        currentPin.style.borderColor = '#ef4444';
+        setTimeout(() => { currentPin.style.borderColor = '#e5e7eb'; }, 250);
+        setTimeout(() => { currentPin.style.borderColor = '#ef4444'; }, 500);
+        setTimeout(() => { currentPin.style.borderColor = '#e5e7eb'; }, 750);
+      }
       return;
     }
 
-    // Get the last action for this employee
     const lastAction = employeeStatus[pin];
 
-    // Validation logic
     const validTransitions: { [key: string]: string[] } = {
-      'clockIn': ['clockOut', undefined], // Can only clock in if previously clocked out or first time
-      'clockOut': ['clockIn', 'endBreak', 'endRestroom', 'endLunch', 'endItIssue', 'endMeeting'], // Can clock out from clocked in or after ending any activity
-      'startBreak': ['clockIn', 'endRestroom', 'endLunch', 'endItIssue', 'endMeeting'], // Can start break when clocked in or after ending other activities
+      'clockIn': ['clockOut', undefined],
+      'clockOut': ['clockIn', 'endBreak', 'endRestroom', 'endLunch', 'endItIssue', 'endMeeting'],
+      'startBreak': ['clockIn', 'endRestroom', 'endLunch', 'endItIssue', 'endMeeting'],
       'endBreak': ['startBreak'],
       'startRestroom': ['clockIn', 'endBreak', 'endLunch', 'endItIssue', 'endMeeting'],
       'endRestroom': ['startRestroom'],
@@ -215,9 +207,7 @@ const App: React.FC = () => {
     message.classList.add(`${type}-message`);
     message.textContent = text;
     messageContainer?.appendChild(message);
-
     message.classList.add('show');
-
     setTimeout(() => {
       message.classList.add('hide');
       setTimeout(() => { messageContainer?.removeChild(message); }, 1000);
@@ -263,19 +253,13 @@ const App: React.FC = () => {
     setShowAddEmployee(false);
   };
 
-  // Get current employee status based on their PIN
   const currentEmployeeStatus = pin ? employeeStatus[pin] : undefined;
 
-  // Determine which buttons to show based on employee status
   const shouldShowButton = (action: string): boolean => {
-    if (!pin) return true; // Show all buttons if no PIN entered
-    
-    // If not clocked in (or no status), only show Clock In
+    if (!pin) return true;
     if (!currentEmployeeStatus || currentEmployeeStatus === 'clockOut') {
       return action === 'clockIn';
     }
-
-    // If clocked in, show Clock Out and all activity start buttons
     if (currentEmployeeStatus === 'clockIn' || currentEmployeeStatus.startsWith('end')) {
       return action === 'clockOut' || 
              action === 'startBreak' || 
@@ -284,14 +268,11 @@ const App: React.FC = () => {
              action === 'startItIssue' || 
              action === 'startMeeting';
     }
-
-    // If in an activity, only show the corresponding end button
     if (currentEmployeeStatus === 'startBreak') return action === 'endBreak';
     if (currentEmployeeStatus === 'startRestroom') return action === 'endRestroom';
     if (currentEmployeeStatus === 'startLunch') return action === 'endLunch';
     if (currentEmployeeStatus === 'startItIssue') return action === 'endItIssue';
     if (currentEmployeeStatus === 'startMeeting') return action === 'endMeeting';
-
     return false;
   };
 
@@ -300,61 +281,61 @@ const App: React.FC = () => {
       <Login showLogin={showLogin} onLoginSuccess={onLoginSuccess} onCloseOverlay={onCloseOverlay} />
       {showAddEmployee && isLoggedIn && <AddEmployee onAddSuccess={onAddEmployeeSuccess} onCloseOverlay={onCloseOverlay} />}
       {showCreateAdmin && !isLoggedIn && <CreateAdmin onCreateSuccess={onCreateAdminSuccess} onCloseOverlay={onCloseOverlay} />}
-      <h1>Employee Time Clock</h1>
-      <div id="currentTime">Current Time: {currentTime}</div>
+      <h1>PHG Employee Time Clock</h1>
+      <div id="currentTime">{currentTime}</div>
       <div className="pin-entry">
-        <div id="currentPin">Enter Your PIN: {pin}</div>
-        <button className="clear-button" onClick={handleClear}>Clear</button>
+        <div id="currentPin">Enter Your PIN: {pin || '______'}</div>
+        <button className="clear-button" onClick={handleClear}>Clear PIN</button>
       </div>
       <div id="message-container"></div>
       <div className="main-container">
         <Keypad onKeyPress={handleKeyPress} />
-      </div>
-      <div className="action-buttons">
-        {shouldShowButton('clockIn') && (
-          <button onClick={() => handleActionClick('clockIn')}>Clock In</button>
-        )}
-        {shouldShowButton('clockOut') && (
-          <button onClick={() => handleActionClick('clockOut')}>Clock Out</button>
-        )}
-        {shouldShowButton('startBreak') && (
-          <button onClick={() => handleActionClick('startBreak')}>Start Break</button>
-        )}
-        {shouldShowButton('endBreak') && (
-          <button onClick={() => handleActionClick('endBreak')}>End Break</button>
-        )}
-        {shouldShowButton('startRestroom') && (
-          <button onClick={() => handleActionClick('startRestroom')}>Start Restroom</button>
-        )}
-        {shouldShowButton('endRestroom') && (
-          <button onClick={() => handleActionClick('endRestroom')}>End Restroom</button>
-        )}
-        {shouldShowButton('startLunch') && (
-          <button onClick={() => handleActionClick('startLunch')}>Start Lunch</button>
-        )}
-        {shouldShowButton('endLunch') && (
-          <button onClick={() => handleActionClick('endLunch')}>End Lunch</button>
-        )}
-        {shouldShowButton('startItIssue') && (
-          <button onClick={() => handleActionClick('startItIssue')}>Start IT Issue</button>
-        )}
-        {shouldShowButton('endItIssue') && (
-          <button onClick={() => handleActionClick('endItIssue')}>End IT Issue</button>
-        )}
-        {shouldShowButton('startMeeting') && (
-          <button onClick={() => handleActionClick('startMeeting')}>Start Meeting</button>
-        )}
-        {shouldShowButton('endMeeting') && (
-          <button onClick={() => handleActionClick('endMeeting')}>End Meeting</button>
-        )}
+        <div className="action-buttons">
+          {shouldShowButton('clockIn') && (
+            <button onClick={() => handleActionClick('clockIn')}>⚡ Clock In</button>
+          )}
+          {shouldShowButton('clockOut') && (
+            <button onClick={() => handleActionClick('clockOut')}>🔴 Clock Out</button>
+          )}
+          {shouldShowButton('startBreak') && (
+            <button onClick={() => handleActionClick('startBreak')}>☕ Start Break</button>
+          )}
+          {shouldShowButton('endBreak') && (
+            <button onClick={() => handleActionClick('endBreak')}>✅ End Break</button>
+          )}
+          {shouldShowButton('startRestroom') && (
+            <button onClick={() => handleActionClick('startRestroom')}>🚻 Start Restroom</button>
+          )}
+          {shouldShowButton('endRestroom') && (
+            <button onClick={() => handleActionClick('endRestroom')}>✅ End Restroom</button>
+          )}
+          {shouldShowButton('startLunch') && (
+            <button onClick={() => handleActionClick('startLunch')}>🍔 Start Lunch</button>
+          )}
+          {shouldShowButton('endLunch') && (
+            <button onClick={() => handleActionClick('endLunch')}>✅ End Lunch</button>
+          )}
+          {shouldShowButton('startItIssue') && (
+            <button onClick={() => handleActionClick('startItIssue')}>💻 IT Issue</button>
+          )}
+          {shouldShowButton('endItIssue') && (
+            <button onClick={() => handleActionClick('endItIssue')}>✅ End IT Issue</button>
+          )}
+          {shouldShowButton('startMeeting') && (
+            <button onClick={() => handleActionClick('startMeeting')}>📊 Meeting</button>
+          )}
+          {shouldShowButton('endMeeting') && (
+            <button onClick={() => handleActionClick('endMeeting')}>✅ End Meeting</button>
+          )}
+        </div>
       </div>
       {showLoginButton && !isLoggedIn && <button id="loginButton" onClick={() => setShowLogin(true)}>
-        Login as an administrator to see and download time cards</button>}
+        🔐 Admin Login</button>}
       {isLoggedIn && <hr></hr>}
       {isLoggedIn && <TimeCard records={timeCardRecords} />}
-      {!isOverlayShowing && isLoggedIn && <button id="downloadButton" onClick={() => { downloadRecords(); }}>Download All Records</button>}
-      {!isOverlayShowing && isLoggedIn && <button id="addEmployeeButton" onClick={() => { setShowAddEmployee(true) }}>Add New Employee</button>}
-      {!isOverlayShowing && isLoggedIn && <button id="logoutButton" onClick={() => { setShowLoginButton(true); setIsLoggedIn(false); }}>Logout</button>}
+      {!isOverlayShowing && isLoggedIn && <button id="downloadButton" onClick={() => { downloadRecords(); }}>📥 Download Records</button>}
+      {!isOverlayShowing && isLoggedIn && <button id="addEmployeeButton" onClick={() => { setShowAddEmployee(true) }}>➕ Add Employee</button>}
+      {!isOverlayShowing && isLoggedIn && <button id="logoutButton" onClick={() => { setShowLoginButton(true); setIsLoggedIn(false); }}>🚪 Logout</button>}
     </div>
   );
 };
