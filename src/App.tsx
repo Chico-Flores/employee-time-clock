@@ -253,29 +253,6 @@ const App: React.FC = () => {
     setShowAddEmployee(false);
   };
 
-  const currentEmployeeStatus = pin ? employeeStatus[pin] : undefined;
-
-  const shouldShowButton = (action: string): boolean => {
-    if (!pin) return true;
-    if (!currentEmployeeStatus || currentEmployeeStatus === 'clockOut') {
-      return action === 'clockIn';
-    }
-    if (currentEmployeeStatus === 'clockIn' || currentEmployeeStatus.startsWith('end')) {
-      return action === 'clockOut' || 
-             action === 'startBreak' || 
-             action === 'startRestroom' || 
-             action === 'startLunch' || 
-             action === 'startItIssue' || 
-             action === 'startMeeting';
-    }
-    if (currentEmployeeStatus === 'startBreak') return action === 'endBreak';
-    if (currentEmployeeStatus === 'startRestroom') return action === 'endRestroom';
-    if (currentEmployeeStatus === 'startLunch') return action === 'endLunch';
-    if (currentEmployeeStatus === 'startItIssue') return action === 'endItIssue';
-    if (currentEmployeeStatus === 'startMeeting') return action === 'endMeeting';
-    return false;
-  };
-
   return (
     <div className="time-clock-container" ref={timeClockContainerRef} onKeyDown={handleKeyDown} tabIndex={0}>
       <Login showLogin={showLogin} onLoginSuccess={onLoginSuccess} onCloseOverlay={onCloseOverlay} />
@@ -284,49 +261,25 @@ const App: React.FC = () => {
       <h1>PHG Employee Time Clock</h1>
       <div id="currentTime">{currentTime}</div>
       <div className="pin-entry">
-        <div id="currentPin">Enter Your PIN: {pin || '______'}</div>
+        <div id="currentPin">Enter PIN: {pin || '______'}</div>
         <button className="clear-button" onClick={handleClear}>Clear PIN</button>
       </div>
       <div id="message-container"></div>
       <div className="main-container">
         <Keypad onKeyPress={handleKeyPress} />
         <div className="action-buttons">
-          {shouldShowButton('clockIn') && (
-            <button onClick={() => handleActionClick('clockIn')}>⚡ Clock In</button>
-          )}
-          {shouldShowButton('clockOut') && (
-            <button onClick={() => handleActionClick('clockOut')}>🔴 Clock Out</button>
-          )}
-          {shouldShowButton('startBreak') && (
-            <button onClick={() => handleActionClick('startBreak')}>☕ Start Break</button>
-          )}
-          {shouldShowButton('endBreak') && (
-            <button onClick={() => handleActionClick('endBreak')}>✅ End Break</button>
-          )}
-          {shouldShowButton('startRestroom') && (
-            <button onClick={() => handleActionClick('startRestroom')}>🚻 Start Restroom</button>
-          )}
-          {shouldShowButton('endRestroom') && (
-            <button onClick={() => handleActionClick('endRestroom')}>✅ End Restroom</button>
-          )}
-          {shouldShowButton('startLunch') && (
-            <button onClick={() => handleActionClick('startLunch')}>🍔 Start Lunch</button>
-          )}
-          {shouldShowButton('endLunch') && (
-            <button onClick={() => handleActionClick('endLunch')}>✅ End Lunch</button>
-          )}
-          {shouldShowButton('startItIssue') && (
-            <button onClick={() => handleActionClick('startItIssue')}>💻 IT Issue</button>
-          )}
-          {shouldShowButton('endItIssue') && (
-            <button onClick={() => handleActionClick('endItIssue')}>✅ End IT Issue</button>
-          )}
-          {shouldShowButton('startMeeting') && (
-            <button onClick={() => handleActionClick('startMeeting')}>📊 Meeting</button>
-          )}
-          {shouldShowButton('endMeeting') && (
-            <button onClick={() => handleActionClick('endMeeting')}>✅ End Meeting</button>
-          )}
+          <button onClick={() => handleActionClick('clockIn')}>⚡ Clock In</button>
+          <button onClick={() => handleActionClick('clockOut')}>🔴 Clock Out</button>
+          <button onClick={() => handleActionClick('startBreak')}>☕ Start Break</button>
+          <button onClick={() => handleActionClick('endBreak')}>✅ End Break</button>
+          <button onClick={() => handleActionClick('startRestroom')}>🚻 Start Restroom</button>
+          <button onClick={() => handleActionClick('endRestroom')}>✅ End Restroom</button>
+          <button onClick={() => handleActionClick('startLunch')}>🍔 Start Lunch</button>
+          <button onClick={() => handleActionClick('endLunch')}>✅ End Lunch</button>
+          <button onClick={() => handleActionClick('startItIssue')}>💻 IT Issue</button>
+          <button onClick={() => handleActionClick('endItIssue')}>✅ End IT Issue</button>
+          <button onClick={() => handleActionClick('startMeeting')}>📊 Meeting</button>
+          <button onClick={() => handleActionClick('endMeeting')}>✅ End Meeting</button>
         </div>
       </div>
       {showLoginButton && !isLoggedIn && <button id="loginButton" onClick={() => setShowLogin(true)}>
