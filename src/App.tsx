@@ -4,6 +4,7 @@ import TimeCard from './components/TimeCard';
 import CreateAdmin from './components/CreateAdmin';
 import AddEmployee from './components/AddEmployee';
 import Login from './components/Login';
+import HoursCalculator from './components/HoursCalculator';
 import './assets/css/styles.css';
 
 const App: React.FC = () => {
@@ -291,6 +292,7 @@ const App: React.FC = () => {
         🔐 Admin Login</button>}
       {isLoggedIn && <hr></hr>}
       {isLoggedIn && <TimeCard records={timeCardRecords} />}
+      {isLoggedIn && <HoursCalculator />}
       {!isOverlayShowing && isLoggedIn && <button id="downloadButton" onClick={() => { downloadRecords(); }}>📥 Download Records</button>}
       {!isOverlayShowing && isLoggedIn && <button id="addEmployeeButton" onClick={() => { setShowAddEmployee(true) }}>➕ Add Employee</button>}
       {!isOverlayShowing && isLoggedIn && <button id="logoutButton" onClick={() => { setShowLoginButton(true); setIsLoggedIn(false); }}>🚪 Logout</button>}
