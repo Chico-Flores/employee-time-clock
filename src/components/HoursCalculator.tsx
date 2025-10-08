@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import Papa from 'papaparse';
 
 interface EmployeeSummary {
   name: string;
@@ -23,30 +24,14 @@ const HoursCalculator: React.FC = () => {
     
     setFileName(file.name);
     
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      const text = event.target?.result as string;
-      parseCSV(text);
-    };
-    reader.readAsText(file);
-  };
-
-  const parseCSV = (text: string) => {
-    const lines = text.split('\n');
-    const headers = lines[0].split(',').map(h => h.trim());
-    
-    const data = lines.slice(1)
-      .filter(line => line.trim())
-      .map(line => {
-        const values = line.split(',').map(v => v.trim().replace(/"/g, ''));
-        const record: any = {};
-        headers.forEach((header, i) => {
-          record[header] = values[i];
-        });
-        return record;
-      });
-    
-    calculateHours(data);
+    Papa.parse(file, {
+      header: true,
+      dynamicTyping: true,
+      skipEmptyLines: true,
+      complete: (results) => {
+        calculateHours(results.data);
+      }
+    });
   };
 
   const calculateHours = (data: any[]) => {
@@ -136,14 +121,20 @@ const HoursCalculator: React.FC = () => {
   };
 
   const downloadSummary = () => {
-    const csvContent = [
-      'Employee,Paid Hours (Decimal),Paid Hours (H:M),Total Work Hours,Break Time (hrs),Lunch Time (hrs),Restroom Time (hrs),IT Issue Time (hrs),Meeting Time (hrs),Number of Shifts',
-      ...summary.map(emp => 
-        `${emp.name},${emp.totalPaidHours},${emp.paidHoursDisplay},${emp.totalWorkHours},${emp.breakTime},${emp.lunchTime},${emp.restroomTime},${emp.itIssueTime},${emp.meetingTime},${emp.shifts}`
-      )
-    ].join('\n');
+    const csv = Papa.unparse(summary.map(emp => ({
+      'Employee': emp.name,
+      'Paid Hours (Decimal)': emp.totalPaidHours,
+      'Paid Hours (H:M)': emp.paidHoursDisplay,
+      'Total Work Hours': emp.totalWorkHours,
+      'Break Time (hrs)': emp.breakTime,
+      'Lunch Time (hrs)': emp.lunchTime,
+      'Restroom Time (hrs)': emp.restroomTime,
+      'IT Issue Time (hrs)': emp.itIssueTime,
+      'Meeting Time (hrs)': emp.meetingTime,
+      'Number of Shifts': emp.shifts
+    })));
     
-    const blob = new Blob([csvContent], { type: 'text/csv' });
+    const blob = new Blob([csv], { type: 'text/csv' });
     const url = window.URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
