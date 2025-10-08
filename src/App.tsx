@@ -260,7 +260,7 @@ const App: React.FC = () => {
       {showCreateAdmin && !isLoggedIn && <CreateAdmin onCreateSuccess={onCreateAdminSuccess} onCloseOverlay={onCloseOverlay} />}
       
       <div className="logo-container">
-        <img src="https://i.imgur.com/6j1deur.png" alt="PowerHouze Group Logo" />
+        <img src="https://storage.googleapis.com/msgsndr/7AsSgaSl1IdPndNHqKfs/media/68e6dc19c4bd9e7a6d37de2b.png" alt="PowerHouze Group Logo" />
       </div>
       <h1>Employee Time Clock</h1>
       <div id="currentTime">{currentTime}</div>
