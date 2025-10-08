@@ -193,9 +193,20 @@ app.post('/add-admin', (req, res) => {
     });
 });
 
-// Route to add employee
+// Route to add employee - UPDATED FOR 4-DIGIT PIN
 app.post('/add-employee', (req, res) => {
     const { name, pin } = req.body;
+
+    // Validate name
+    if (!name || name.trim().length < 2) {
+        return res.status(400).json({ error: 'Name must be at least 2 characters long' });
+    }
+
+    // Validate PIN is exactly 4 digits
+    if (!pin || !/^\d{4}$/.test(pin)) {
+        return res.status(400).json({ error: 'PIN must be exactly 4 digits' });
+    }
+
     usersDB.findOne({ pin }, (err, existingEmployee) => {
         if (err) return res.status(500).json({ error: err.message });
         if (existingEmployee) return res.status(400).json({ error: 'PIN already exists' });
