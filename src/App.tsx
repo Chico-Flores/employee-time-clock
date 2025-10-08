@@ -258,8 +258,13 @@ const App: React.FC = () => {
       <Login showLogin={showLogin} onLoginSuccess={onLoginSuccess} onCloseOverlay={onCloseOverlay} />
       {showAddEmployee && isLoggedIn && <AddEmployee onAddSuccess={onAddEmployeeSuccess} onCloseOverlay={onCloseOverlay} />}
       {showCreateAdmin && !isLoggedIn && <CreateAdmin onCreateSuccess={onCreateAdminSuccess} onCloseOverlay={onCloseOverlay} />}
-      <h1>PHG Employee Time Clock</h1>
+      
+      <div className="logo-container">
+        <img src="https://i.imgur.com/6j1deur.png" alt="PowerHouze Group Logo" />
+      </div>
+      <h1>Employee Time Clock</h1>
       <div id="currentTime">{currentTime}</div>
+      
       <div className="pin-entry">
         <div id="currentPin">Enter PIN: {pin || '____'}</div>
         <button className="clear-button" onClick={handleClear}>Clear PIN</button>
