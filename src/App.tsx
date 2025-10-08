@@ -5,7 +5,6 @@ import CreateAdmin from './components/CreateAdmin';
 import AddEmployee from './components/AddEmployee';
 import Login from './components/Login';
 import './assets/css/styles.css';
-import logo from './assets/phg-logo.png';
 
 const App: React.FC = () => {
   const timeClockContainerRef = useRef<HTMLDivElement>(null);
@@ -261,7 +260,7 @@ const App: React.FC = () => {
       {showCreateAdmin && !isLoggedIn && <CreateAdmin onCreateSuccess={onCreateAdminSuccess} onCloseOverlay={onCloseOverlay} />}
       
       <div className="logo-container">
-        <img src={logo} alt="PowerHouze Group Logo" />
+        <img src="https://i.imgur.com/6j1deur.png" alt="PowerHouze Group Logo" />
       </div>
       <h1>Employee Time Clock</h1>
       <div id="currentTime">{currentTime}</div>
