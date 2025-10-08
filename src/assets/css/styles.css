@@ -77,8 +77,8 @@ body {
   background: white;
   border-radius: 20px;
   padding: 2rem;
-  margin: 0 auto 2rem;
-  max-width: 500px;
+  margin: 0 auto 3rem;
+  max-width: 600px;
   box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
   transition: transform 0.3s ease;
 }
@@ -128,68 +128,35 @@ body {
   box-shadow: 0 6px 20px rgba(239, 68, 68, 0.4);
 }
 
-/* Main Container */
+/* Main Container - Centered */
 .main-container {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: center;
-  gap: 3rem;
   margin: 0 auto;
   max-width: 1200px;
-  flex-wrap: wrap;
 }
 
-/* Keypad Container */
+/* Hide Keypad */
 .keypad-container {
-  background: white;
-  border-radius: 20px;
-  padding: 2rem;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 15px;
-  width: fit-content;
+  display: none;
 }
 
-.keypad-button {
-  width: 80px;
-  height: 80px;
-  font-size: 24px;
-  font-weight: 600;
-  border: none;
-  background: linear-gradient(135deg, #1e3a8a, #2563eb);
-  color: white;
-  cursor: pointer;
-  transition: all 0.3s ease;
-  border-radius: 15px;
-  box-shadow: 0 4px 12px rgba(30, 58, 138, 0.3);
-}
-
-.keypad-button:hover {
-  background: linear-gradient(135deg, #2563eb, #3b82f6);
-  transform: translateY(-3px) scale(1.05);
-  box-shadow: 0 8px 20px rgba(30, 58, 138, 0.4);
-}
-
-.keypad-button:active {
-  transform: translateY(0) scale(0.98);
-}
-
-/* Action Buttons */
+/* Action Buttons - Centered Grid */
 .action-buttons {
   background: white;
   border-radius: 20px;
-  padding: 2rem;
+  padding: 2.5rem;
   box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  grid-template-columns: repeat(3, 1fr);
   gap: 15px;
   max-width: 800px;
   margin: 0 auto;
 }
 
 .action-buttons button {
-  padding: 18px 24px;
+  padding: 20px 24px;
   background: linear-gradient(135deg, #2563eb, #1e40af);
   color: white;
   border: none;
@@ -202,6 +169,7 @@ body {
   white-space: nowrap;
   position: relative;
   overflow: hidden;
+  min-width: 180px;
 }
 
 .action-buttons button::before {
@@ -232,7 +200,7 @@ body {
   transform: translateY(0);
 }
 
-/* Special button styling for different actions */
+/* Special button styling for Clock In/Out */
 .action-buttons button:nth-child(1) {
   background: linear-gradient(135deg, #10b981, #059669);
   box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
@@ -535,18 +503,24 @@ input[type="password"]:focus {
 }
 
 /* Responsive Design */
+@media (max-width: 992px) {
+  .action-buttons {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
 @media (max-width: 768px) {
   .time-clock-container {
     padding: 1rem;
   }
 
-  .main-container {
-    flex-direction: column;
-    gap: 2rem;
-  }
-
   .action-buttons {
     grid-template-columns: 1fr;
+    padding: 1.5rem;
+  }
+
+  .action-buttons button {
+    min-width: auto;
   }
 
   .time-clock-container > h1 {
