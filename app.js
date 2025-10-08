@@ -13,7 +13,7 @@ let SECRET_KEY = crypto.randomBytes(32).toString('hex');
 
 // Create the Express app
 const app = express();
-const port = 3001;
+const PORT = process.env.PORT || 3000;
 const corsOptions = {
     credentials: true,
     optionsSuccessStatus: 204
