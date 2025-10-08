@@ -7,18 +7,18 @@ import Login from './components/Login';
 import './assets/css/styles.css';
 
 const App: React.FC = () => {
-  const timeClockContainerRef = useRef<HTMLDivElement>(null); // Ref to the timeClockContainer
-  const [isLoggedIn, setIsLoggedIn] = useState(false); // State to check if the user is logged in
-  const [showLogin, setShowLogin] = useState(false); // State to control showing login
-  const [showLoginButton, setShowLoginButton] = useState(false); // State to control showing login button
-  const [showCreateAdmin, setShowCreateAdmin] = useState(false); // State to control showing createAdmin
-  const [pin, setPin] = useState(''); // State to store the PIN
-  const [currentTime, setCurrentTime] = useState(new Date().toLocaleString()); // State to store the current time
-  const [showAddEmployee, setShowAddEmployee] = useState(false); // State to control showing addEmployee
-  const [timeCardRecords, setTimeCardRecords] = useState<{ id: number; name: string; pin: string; action: string; time: string; ip: string }[]>([]);  // State to store the time card records
-  const [employeeStatus, setEmployeeStatus] = useState<{ [pin: string]: string }>({}); // State to store the employee status
-  const isOverlayShowing = showCreateAdmin || showLogin || showAddEmployee; // State to check if an overlay is showing
-  const [lastInteractionTime, setLastInteractionTime] = useState(new Date()); // State to track the last interaction time
+  const timeClockContainerRef = useRef<HTMLDivElement>(null);
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [showLogin, setShowLogin] = useState(false);
+  const [showLoginButton, setShowLoginButton] = useState(false);
+  const [showCreateAdmin, setShowCreateAdmin] = useState(false);
+  const [pin, setPin] = useState('');
+  const [currentTime, setCurrentTime] = useState(new Date().toLocaleString());
+  const [showAddEmployee, setShowAddEmployee] = useState(false);
+  const [timeCardRecords, setTimeCardRecords] = useState<{ id: number; name: string; pin: string; action: string; time: string; ip: string }[]>([]);
+  const [employeeStatus, setEmployeeStatus] = useState<{ [pin: string]: string }>({}); // Stores last action per employee
+  const isOverlayShowing = showCreateAdmin || showLogin || showAddEmployee;
+  const [lastInteractionTime, setLastInteractionTime] = useState(new Date());
 
   // Effect to update the current time every second
   useEffect(() => {
@@ -70,25 +70,22 @@ const App: React.FC = () => {
 
   // Use an effect to set up the inactivity timer and handle user interactions
   useEffect(() => {
-    // Function to log the user out
     const logout = () => {
       fetch('/logout').then(() => {
         setShowLoginButton(true);
-        window.location.reload(); // Reload the app to reflect changes
+        window.location.reload();
       });
     };
 
-    // Set up a timer to log out after 30 minutes of inactivity
     const logoutTimer = setTimeout(() => {
       const now = new Date();
-      const timeDiff = now.getTime() - lastInteractionTime.getTime(); // Time difference in milliseconds
+      const timeDiff = now.getTime() - lastInteractionTime.getTime();
 
-      if (timeDiff >= 30 * 60 * 1000) { // 30 minutes in milliseconds
+      if (timeDiff >= 30 * 60 * 1000) {
         logout();
       }
     }, 30 * 60 * 1000);
 
-    // Set up event listeners for user interactions
     window.addEventListener('mousemove', handleInteraction);
     window.addEventListener('keydown', handleInteraction);
     window.addEventListener('click', handleInteraction);
@@ -99,7 +96,7 @@ const App: React.FC = () => {
       window.removeEventListener('keydown', handleInteraction);
       window.removeEventListener('click', handleInteraction);
     };
-  }, [lastInteractionTime]); // Re-run the effect when the last interaction time changes
+  }, [lastInteractionTime]);
 
   const handleKeyPress = (key: string) => {
     if (pin.length < 6 && key.trim() !== '' && !isNaN(Number(key))) {
@@ -108,15 +105,12 @@ const App: React.FC = () => {
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
-    // Check if the key is a number
     if (!isNaN(Number(e.key)) && !isOverlayShowing) {
       handleKeyPress(e.key);
     }
-    // Check if the key is backspace or delete
     if (e.key === 'Backspace' || e.key === 'Delete') {
       handleBackspace();
     }
-    // Check if the key is Enter and an overlay is showing
     if (e.key === 'Enter' && isOverlayShowing) {
       if (showLogin) {
         let loginButton = document.getElementById('login');
@@ -134,37 +128,53 @@ const App: React.FC = () => {
   };
 
   const handleBackspace = () => {
-    setPin(pin.slice(0, -1)); // Remove the last character from the PIN
+    setPin(pin.slice(0, -1));
   };
 
   const handleClear = () => {
-    setPin(''); // Clear the entire PIN
+    setPin('');
   };
 
-  const handleActionClick = async (selectedAction: 'clockIn' | 'clockOut' | 'startBreak' | 'endBreak') => {
+  const handleActionClick = async (selectedAction: string) => {
     // Flash red and exit early if no PIN is entered
     if (pin === '') {
-      document.body.scrollTo(0, 0); // scroll up
+      document.body.scrollTo(0, 0);
       let currentPin = document.getElementById('currentPin');
-      currentPin.style.borderColor = '#ff7866'; // red
-      setTimeout(() => { currentPin.style.borderColor = 'gainsboro'; }, 250); // grey
-      setTimeout(() => { currentPin.style.borderColor = '#ff7866'; }, 500); // red
-      setTimeout(() => { currentPin.style.borderColor = 'gainsboro'; }, 750); // grey
+      currentPin.style.borderColor = '#ff7866';
+      setTimeout(() => { currentPin.style.borderColor = 'gainsboro'; }, 250);
+      setTimeout(() => { currentPin.style.borderColor = '#ff7866'; }, 500);
+      setTimeout(() => { currentPin.style.borderColor = 'gainsboro'; }, 750);
       return;
     }
 
-    // Implementing the clock-in/clock-out logic
+    // Get the last action for this employee
     const lastAction = employeeStatus[pin];
-    if (
-      (selectedAction === 'clockIn' && lastAction !== 'clockOut' && lastAction !== undefined) ||
-      (selectedAction === 'clockOut' && (lastAction !== 'clockIn' && lastAction !== 'endBreak')) ||
-      (selectedAction === 'startBreak' && lastAction !== 'clockIn') ||
-      (selectedAction === 'endBreak' && lastAction !== 'startBreak')
-    ) {
-      let message = `Invalid action: ${selectedAction}, Last Action: ${lastAction}`;
+
+    // Validation logic
+    const validTransitions: { [key: string]: string[] } = {
+      'clockIn': ['clockOut', undefined], // Can only clock in if previously clocked out or first time
+      'clockOut': ['clockIn', 'endBreak', 'endRestroom', 'endLunch', 'endItIssue', 'endMeeting'], // Can clock out from clocked in or after ending any activity
+      'startBreak': ['clockIn', 'endRestroom', 'endLunch', 'endItIssue', 'endMeeting'], // Can start break when clocked in or after ending other activities
+      'endBreak': ['startBreak'],
+      'startRestroom': ['clockIn', 'endBreak', 'endLunch', 'endItIssue', 'endMeeting'],
+      'endRestroom': ['startRestroom'],
+      'startLunch': ['clockIn', 'endBreak', 'endRestroom', 'endItIssue', 'endMeeting'],
+      'endLunch': ['startLunch'],
+      'startItIssue': ['clockIn', 'endBreak', 'endRestroom', 'endLunch', 'endMeeting'],
+      'endItIssue': ['startItIssue'],
+      'startMeeting': ['clockIn', 'endBreak', 'endRestroom', 'endLunch', 'endItIssue'],
+      'endMeeting': ['startMeeting']
+    };
+
+    if (!validTransitions[selectedAction]?.includes(lastAction)) {
+      let message = `Invalid action: ${selectedAction}, Last Action: ${lastAction || 'None'}`;
       if (selectedAction === 'clockOut' && !lastAction) message = 'You must clock in before you can clock out';
-      if (selectedAction === 'startBreak' && !lastAction) message = 'You must clock in before you can start a break';
-      if (selectedAction === 'endBreak' && !lastAction) message = 'You must start a break before you can end it';
+      if (['startBreak', 'startRestroom', 'startLunch', 'startItIssue', 'startMeeting'].includes(selectedAction) && !lastAction) {
+        message = 'You must clock in first';
+      }
+      if (selectedAction.startsWith('end') && !lastAction?.startsWith('start')) {
+        message = `You must start ${selectedAction.replace('end', '').toLowerCase()} before you can end it`;
+      }
       showMessageToUser(message, 'error');
       return;
     }
@@ -185,13 +195,12 @@ const App: React.FC = () => {
         return response.json();
       })
       .then((data) => {
-        // Success, update the last action for this PIN
         setEmployeeStatus({
           ...employeeStatus,
           [pin]: selectedAction,
         });
         setTimeCardRecords([...timeCardRecords, { id: data.id, name: data.name, pin, action: record.action, time: record.time, ip: ip }]);
-        setPin(''); // Clearing the PIN
+        setPin('');
         showMessageToUser('Time recorded successfully', 'success');
       })
       .catch((error) => {
@@ -207,10 +216,8 @@ const App: React.FC = () => {
     message.textContent = text;
     messageContainer?.appendChild(message);
 
-    // Add the "show" class to make the message appear
     message.classList.add('show');
 
-    // Remove the message after 3 seconds
     setTimeout(() => {
       message.classList.add('hide');
       setTimeout(() => { messageContainer?.removeChild(message); }, 1000);
@@ -256,7 +263,38 @@ const App: React.FC = () => {
     setShowAddEmployee(false);
   };
 
-  // Return the JSX
+  // Get current employee status based on their PIN
+  const currentEmployeeStatus = pin ? employeeStatus[pin] : undefined;
+
+  // Determine which buttons to show based on employee status
+  const shouldShowButton = (action: string): boolean => {
+    if (!pin) return true; // Show all buttons if no PIN entered
+    
+    // If not clocked in (or no status), only show Clock In
+    if (!currentEmployeeStatus || currentEmployeeStatus === 'clockOut') {
+      return action === 'clockIn';
+    }
+
+    // If clocked in, show Clock Out and all activity start buttons
+    if (currentEmployeeStatus === 'clockIn' || currentEmployeeStatus.startsWith('end')) {
+      return action === 'clockOut' || 
+             action === 'startBreak' || 
+             action === 'startRestroom' || 
+             action === 'startLunch' || 
+             action === 'startItIssue' || 
+             action === 'startMeeting';
+    }
+
+    // If in an activity, only show the corresponding end button
+    if (currentEmployeeStatus === 'startBreak') return action === 'endBreak';
+    if (currentEmployeeStatus === 'startRestroom') return action === 'endRestroom';
+    if (currentEmployeeStatus === 'startLunch') return action === 'endLunch';
+    if (currentEmployeeStatus === 'startItIssue') return action === 'endItIssue';
+    if (currentEmployeeStatus === 'startMeeting') return action === 'endMeeting';
+
+    return false;
+  };
+
   return (
     <div className="time-clock-container" ref={timeClockContainerRef} onKeyDown={handleKeyDown} tabIndex={0}>
       <Login showLogin={showLogin} onLoginSuccess={onLoginSuccess} onCloseOverlay={onCloseOverlay} />
@@ -273,10 +311,42 @@ const App: React.FC = () => {
         <Keypad onKeyPress={handleKeyPress} />
       </div>
       <div className="action-buttons">
-        <button onClick={() => handleActionClick('clockIn')}>Clock In</button>
-        <button onClick={() => handleActionClick('clockOut')}>Clock Out</button>
-        <button onClick={() => handleActionClick('startBreak')}>Start Break</button>
-        <button onClick={() => handleActionClick('endBreak')}>End Break</button>
+        {shouldShowButton('clockIn') && (
+          <button onClick={() => handleActionClick('clockIn')}>Clock In</button>
+        )}
+        {shouldShowButton('clockOut') && (
+          <button onClick={() => handleActionClick('clockOut')}>Clock Out</button>
+        )}
+        {shouldShowButton('startBreak') && (
+          <button onClick={() => handleActionClick('startBreak')}>Start Break</button>
+        )}
+        {shouldShowButton('endBreak') && (
+          <button onClick={() => handleActionClick('endBreak')}>End Break</button>
+        )}
+        {shouldShowButton('startRestroom') && (
+          <button onClick={() => handleActionClick('startRestroom')}>Start Restroom</button>
+        )}
+        {shouldShowButton('endRestroom') && (
+          <button onClick={() => handleActionClick('endRestroom')}>End Restroom</button>
+        )}
+        {shouldShowButton('startLunch') && (
+          <button onClick={() => handleActionClick('startLunch')}>Start Lunch</button>
+        )}
+        {shouldShowButton('endLunch') && (
+          <button onClick={() => handleActionClick('endLunch')}>End Lunch</button>
+        )}
+        {shouldShowButton('startItIssue') && (
+          <button onClick={() => handleActionClick('startItIssue')}>Start IT Issue</button>
+        )}
+        {shouldShowButton('endItIssue') && (
+          <button onClick={() => handleActionClick('endItIssue')}>End IT Issue</button>
+        )}
+        {shouldShowButton('startMeeting') && (
+          <button onClick={() => handleActionClick('startMeeting')}>Start Meeting</button>
+        )}
+        {shouldShowButton('endMeeting') && (
+          <button onClick={() => handleActionClick('endMeeting')}>End Meeting</button>
+        )}
       </div>
       {showLoginButton && !isLoggedIn && <button id="loginButton" onClick={() => setShowLogin(true)}>
         Login as an administrator to see and download time cards</button>}
