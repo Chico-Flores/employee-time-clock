@@ -1,19 +1,63 @@
-const Datastore = require('nedb');
-const path = require('path');
-const fs = require('fs');
+const { MongoClient } = require('mongodb');
 
-let dirPath = path.join(__dirname, 'dist');
-let usersPath = path.join(dirPath, 'users.db');
-let recordsPath = path.join(dirPath, 'records.db');
+// MongoDB connection string
+const MONGODB_URI = process.env.MONGODB_URI || 'mongodb+srv://timeclockuser:Pckings9$@timeclock.awtl8gt.mongodb.net/?retryWrites=true&w=majority&appName=timeclock';
+const DB_NAME = 'timeclock';
 
-if (!fs.existsSync(dirPath)) {
-  fs.mkdirSync(dirPath);
+let client;
+let db;
+
+async function connectDB() {
+  try {
+    if (db) {
+      return db;
+    }
+
+    console.log('Connecting to MongoDB...');
+    client = new MongoClient(MONGODB_URI, {
+      useNewUrlParser: true,
+      useUnifiedTopology: true,
+    });
+
+    await client.connect();
+    db = client.db(DB_NAME);
+    
+    console.log('✅ Connected to MongoDB successfully!');
+    
+    // Create indexes for better performance
+    await db.collection('users').createIndex({ pin: 1 }, { unique: true });
+    await db.collection('users').createIndex({ username: 1 }, { unique: true, sparse: true });
+    await db.collection('records').createIndex({ pin: 1 });
+    await db.collection('records').createIndex({ time: -1 });
+    
+    console.log('✅ Database indexes created');
+    
+    return db;
+  } catch (error) {
+    console.error('❌ MongoDB connection error:', error);
+    process.exit(1);
+  }
 }
 
-const usersDB = new Datastore({ filename: usersPath, autoload: true });
-const recordsDB = new Datastore({ filename: recordsPath, autoload: true });
+function getDB() {
+  if (!db) {
+    throw new Error('Database not initialized. Call connectDB() first.');
+  }
+  return db;
+}
+
+async function closeDB() {
+  if (client) {
+    await client.close();
+    console.log('Database connection closed');
+  }
+}
+
+// Initialize on module load
+connectDB().catch(console.error);
 
 module.exports = {
-  usersDB,
-  recordsDB
+  connectDB,
+  getDB,
+  closeDB
 };
