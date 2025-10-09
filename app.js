@@ -2,7 +2,7 @@ const express = require('express');
 const bodyParser = require('body-parser');
 const bcrypt = require('bcryptjs');
 const crypto = require('crypto');
-const { usersDB, recordsDB } = require('./init-db.js');
+const { connectDB, getDB } = require('./init-db.js');
 const json2csv = require('json2csv').parse;
 const path = require('path');
 const cors = require('cors');
@@ -14,7 +14,7 @@ let SECRET_KEY = crypto.randomBytes(32).toString('hex');
 // Create the Express app
 const app = express();
 const PORT = process.env.PORT || 3001;
-const DISCORD_WEBHOOK_URL = process.env.DISCORD_WEBHOOK_URL; // Add this as environment variable in Render
+const DISCORD_WEBHOOK_URL = process.env.DISCORD_WEBHOOK_URL;
 
 const corsOptions = {
     credentials: true,
@@ -48,7 +48,6 @@ async function sendDiscordNotification(name, action, time) {
         return;
     }
 
-    // Map actions to emojis and colors
     const actionConfig = {
         'ClockIn': { emoji: '🟢', color: 3066993, text: 'clocked in' },
         'ClockOut': { emoji: '🔴', color: 15158332, text: 'clocked out' },
@@ -98,71 +97,100 @@ app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, 'dist/index.html'));
 });
 
-// Route to get records by PIN
-app.post('/get-records', (req, res) => {
-    recordsDB.find({}, (err, rows) => {
-        if (err) return res.status(500).json({ error: err.message });
-        res.json(rows);
-    });
+// Route to get records
+app.post('/get-records', async (req, res) => {
+    try {
+        const db = getDB();
+        const records = await db.collection('records').find({}).toArray();
+        res.json(records);
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
 });
 
 // Route to get all users
-app.post('/get-users', (req, res) => {
-    usersDB.find({}, (err, rows) => {
-        if (err) return res.status(500).json({ error: err.message });
-        res.json(rows);
-    });
+app.post('/get-users', async (req, res) => {
+    try {
+        const db = getDB();
+        const users = await db.collection('users').find({}).toArray();
+        res.json(users);
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
 });
 
 // Route to download records as CSV
-app.post('/download-records', (req, res) => {
-    recordsDB.find({}, (err, rows) => {
-        if (err) return res.status(500).json({ error: err.message });
+app.post('/download-records', async (req, res) => {
+    try {
+        const db = getDB();
+        const records = await db.collection('records').find({}).toArray();
         const fields = ['name', 'pin', 'action', 'time', 'ip'];
         const opts = { fields };
-        const csv = json2csv(rows, opts);
+        const csv = json2csv(records, opts);
         res.setHeader('Content-disposition', 'attachment; filename=records.csv');
         res.set('Content-Type', 'text/csv');
         res.status(200).send(csv);
-    });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
 });
 
 // Route to add record
 app.post('/add-record', async (req, res) => {
     const { pin, action, time, ip } = req.body;
     
-    usersDB.findOne({ pin }, async (err, user) => {
-        if (err) return res.status(500).json({ error: err.message });
-        if (!user) return res.status(400).json({ error: 'No user with this PIN' });
+    try {
+        const db = getDB();
+        const user = await db.collection('users').findOne({ pin });
+        
+        if (!user) {
+            return res.status(400).json({ error: 'No user with this PIN' });
+        }
         
         const name = user.name;
-        
-        recordsDB.insert({ name, pin, action, time, ip }, async (err, newRecord) => {
-            if (err) return res.status(500).json({ error: err.message });
-
-            // Send Discord notification (non-blocking)
-            sendDiscordNotification(name, action, time).catch(console.error);
-
-            res.status(201).json({ id: newRecord._id, name });
+        const result = await db.collection('records').insertOne({ 
+            name, 
+            pin, 
+            action, 
+            time, 
+            ip 
         });
-    });
+
+        // Send Discord notification (non-blocking)
+        sendDiscordNotification(name, action, time).catch(console.error);
+
+        res.status(201).json({ id: result.insertedId, name });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
 });
 
 // Route to login
-app.post('/login', (req, res) => {
+app.post('/login', async (req, res) => {
     const { username, password } = req.body;
-    usersDB.findOne({ username }, (err, user) => {
-        if (err) return res.status(500).json({ error: err.message });
-        if (!user) return res.status(401).json({ error: 'No user with those credentials' });
+    
+    try {
+        const db = getDB();
+        const user = await db.collection('users').findOne({ username });
+        
+        if (!user) {
+            return res.status(401).json({ error: 'No user with those credentials' });
+        }
+        
         const passwordIsValid = bcrypt.compareSync(password, user.password);
-        if (!passwordIsValid) return res.status(401).json({ error: 'Invalid credentials' });
+        
+        if (!passwordIsValid) {
+            return res.status(401).json({ error: 'Invalid credentials' });
+        }
 
         req.session.admin = true;
         req.session.save(err => {
             if (err) return res.status(500).json({ error: err.message });
             res.json({ success: true });
         });
-    });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
 });
 
 // Route to logout
@@ -178,23 +206,35 @@ app.get('/is-logged-in', (req, res) => {
     res.json({ isLoggedIn: !!req.session.admin });
 });
 
-// Route to add user
-app.post('/add-admin', (req, res) => {
+// Route to add admin
+app.post('/add-admin', async (req, res) => {
     const { username, password } = req.body;
-    usersDB.findOne({ username }, (err, existingUser) => {
-        if (err) return res.status(500).json({ error: err.message });
-        if (existingUser) return res.status(400).json({ error: 'Username already exists' });
+    
+    try {
+        const db = getDB();
+        const existingUser = await db.collection('users').findOne({ username });
+        
+        if (existingUser) {
+            return res.status(400).json({ error: 'Username already exists' });
+        }
+        
         const hashedPassword = bcrypt.hashSync(password, 8);
         const loginToken = crypto.randomBytes(16).toString('hex');
-        usersDB.insert({ username, password: hashedPassword, loginToken: loginToken }, (err, newUser) => {
-            if (err) return res.status(500).json({ error: err.message });
-            res.status(201).json({ id: newUser._id, token: loginToken });
+        
+        const result = await db.collection('users').insertOne({ 
+            username, 
+            password: hashedPassword, 
+            loginToken: loginToken 
         });
-    });
+        
+        res.status(201).json({ id: result.insertedId, token: loginToken });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
 });
 
 // Route to add employee - UPDATED FOR 4-DIGIT PIN
-app.post('/add-employee', (req, res) => {
+app.post('/add-employee', async (req, res) => {
     const { name, pin } = req.body;
 
     // Validate name
@@ -207,24 +247,30 @@ app.post('/add-employee', (req, res) => {
         return res.status(400).json({ error: 'PIN must be exactly 4 digits' });
     }
 
-    usersDB.findOne({ pin }, (err, existingEmployee) => {
-        if (err) return res.status(500).json({ error: err.message });
-        if (existingEmployee) return res.status(400).json({ error: 'PIN already exists' });
-        usersDB.insert({ name, pin }, (err, newEmployee) => {
-            if (err) return res.status(500).json({ error: err.message });
-            res.status(201).json({ id: newEmployee._id });
-        });
-    });
+    try {
+        const db = getDB();
+        const existingEmployee = await db.collection('users').findOne({ pin });
+        
+        if (existingEmployee) {
+            return res.status(400).json({ error: 'PIN already exists' });
+        }
+        
+        const result = await db.collection('users').insertOne({ name, pin });
+        res.status(201).json({ id: result.insertedId });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
 });
 
-// Always start the server
-app.listen(PORT, '0.0.0.0', () => {
-    console.log(`Server running on port ${PORT}`);
+// Start server after DB connection
+connectDB().then(() => {
+    app.listen(PORT, '0.0.0.0', () => {
+        console.log(`✅ Server running on port ${PORT}`);
+    });
+}).catch(error => {
+    console.error('❌ Failed to start server:', error);
+    process.exit(1);
 });
 
 // Export the app for compatibility
 module.exports = app;
-module.exports.db = {
-    usersDB,
-    recordsDB
-};
