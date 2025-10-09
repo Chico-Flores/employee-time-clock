@@ -123,6 +123,19 @@ const App: React.FC = () => {
     };
   }, [lastInteractionTime]);
 
+  // NEW: Auto-refresh records every 30 seconds when logged in
+  useEffect(() => {
+    if (isLoggedIn) {
+      const interval = setInterval(() => {
+        fetch('/get-records', { method: 'POST' })
+          .then((response) => response.json())
+          .then((records) => setTimeCardRecords(records))
+          .catch((error) => console.error('Error refreshing records:', error));
+      }, 30000);
+      return () => clearInterval(interval);
+    }
+  }, [isLoggedIn]);
+
   const handleKeyPress = (key: string) => {
     if (pin.length < 4 && key.trim() !== '' && !isNaN(Number(key))) {
       setPin(pin + key);
