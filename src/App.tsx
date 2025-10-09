@@ -54,6 +54,37 @@ const App: React.FC = () => {
       .catch((error) => console.error('Error checking login status:', error));
   }, [setIsLoggedIn, setTimeCardRecords]);
 
+  // NEW: Load employee status from existing records
+  useEffect(() => {
+    if (timeCardRecords.length > 0) {
+      // Build employee status from records
+      const statusMap: { [pin: string]: string } = {};
+      
+      // Group records by PIN
+      const recordsByPin: { [pin: string]: typeof timeCardRecords } = {};
+      timeCardRecords.forEach(record => {
+        if (!recordsByPin[record.pin]) {
+          recordsByPin[record.pin] = [];
+        }
+        recordsByPin[record.pin].push(record);
+      });
+      
+      // For each employee, find their last action
+      Object.keys(recordsByPin).forEach(pin => {
+        const records = recordsByPin[pin];
+        // Sort by time (most recent last)
+        records.sort((a, b) => new Date(a.time).getTime() - new Date(b.time).getTime());
+        const lastRecord = records[records.length - 1];
+        
+        // Convert action to lowercase for consistency with state
+        const action = lastRecord.action.charAt(0).toLowerCase() + lastRecord.action.slice(1);
+        statusMap[pin] = action;
+      });
+      
+      setEmployeeStatus(statusMap);
+    }
+  }, [timeCardRecords]);
+
   useEffect(() => {
     if (!showCreateAdmin && !showLogin) {
       timeClockContainerRef.current?.focus();
