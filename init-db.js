@@ -14,10 +14,7 @@ async function connectDB() {
     }
 
     console.log('Connecting to MongoDB...');
-    client = new MongoClient(MONGODB_URI, {
-      useNewUrlParser: true,
-      useUnifiedTopology: true,
-    });
+    client = new MongoClient(MONGODB_URI);
 
     await client.connect();
     db = client.db(DB_NAME);
@@ -35,7 +32,7 @@ async function connectDB() {
     return db;
   } catch (error) {
     console.error('❌ MongoDB connection error:', error);
-    process.exit(1);
+    throw error;
   }
 }
 
@@ -49,12 +46,27 @@ function getDB() {
 async function closeDB() {
   if (client) {
     await client.close();
+    db = null;
+    client = null;
     console.log('Database connection closed');
   }
 }
 
-// Initialize on module load
-connectDB().catch(console.error);
+// If this file is run directly (during build), connect and then close
+if (require.main === module) {
+  connectDB()
+    .then(() => {
+      console.log('✅ Database initialization complete');
+      return closeDB();
+    })
+    .then(() => {
+      process.exit(0);
+    })
+    .catch((error) => {
+      console.error('❌ Database initialization failed:', error);
+      process.exit(1);
+    });
+}
 
 module.exports = {
   connectDB,
