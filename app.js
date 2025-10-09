@@ -119,11 +119,29 @@ app.post('/get-users', async (req, res) => {
     }
 });
 
-// Route to download records as CSV
+// Route to download records as CSV with optional date filtering
 app.post('/download-records', async (req, res) => {
     try {
         const db = getDB();
-        const records = await db.collection('records').find({}).toArray();
+        const { startDate, endDate } = req.query;
+        
+        // Build query filter
+        let query = {};
+        if (startDate || endDate) {
+            query = { time: {} };
+            if (startDate) {
+                const start = new Date(startDate);
+                start.setHours(0, 0, 0, 0);
+                query.time.$gte = start.toLocaleString();
+            }
+            if (endDate) {
+                const end = new Date(endDate);
+                end.setHours(23, 59, 59, 999);
+                query.time.$lte = end.toLocaleString();
+            }
+        }
+        
+        const records = await db.collection('records').find(query).toArray();
         const fields = ['name', 'pin', 'action', 'time', 'ip'];
         const opts = { fields };
         const csv = json2csv(records, opts);
