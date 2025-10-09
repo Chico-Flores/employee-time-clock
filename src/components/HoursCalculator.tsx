@@ -109,6 +109,8 @@ const HoursCalculator: React.FC = () => {
       let currentActivity: string | null = null;
       let activityStart: Date | null = null;
       
+      let shiftsCompleted = 0;
+      
       emp.events.forEach((event: any) => {
         const { action, time } = event;
         
@@ -119,6 +121,7 @@ const HoursCalculator: React.FC = () => {
             const diff = (time.getTime() - currentClockIn.getTime()) / (1000 * 60);
             totalWorkMinutes += diff;
             currentClockIn = null;
+            shiftsCompleted++;
           }
         } else if (action.startsWith('Start')) {
           activityStart = time;
@@ -138,6 +141,11 @@ const HoursCalculator: React.FC = () => {
           }
         }
       });
+      
+      // Skip employees who haven't clocked out yet
+      if (shiftsCompleted === 0) {
+        return;
+      }
       
       const paidMinutes = totalWorkMinutes - breakMinutes - lunchMinutes;
       const paidHours = Math.floor(paidMinutes / 60);
