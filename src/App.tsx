@@ -5,6 +5,7 @@ import CreateAdmin from './components/CreateAdmin';
 import AddEmployee from './components/AddEmployee';
 import Login from './components/Login';
 import HoursCalculator from './components/HoursCalculator';
+import DownloadRecords from './components/DownloadRecords';
 import './assets/css/styles.css';
 
 const App: React.FC = () => {
@@ -54,13 +55,11 @@ const App: React.FC = () => {
       .catch((error) => console.error('Error checking login status:', error));
   }, [setIsLoggedIn, setTimeCardRecords]);
 
-  // NEW: Load employee status from existing records
+  // Load employee status from existing records
   useEffect(() => {
     if (timeCardRecords.length > 0) {
-      // Build employee status from records
       const statusMap: { [pin: string]: string } = {};
       
-      // Group records by PIN
       const recordsByPin: { [pin: string]: typeof timeCardRecords } = {};
       timeCardRecords.forEach(record => {
         if (!recordsByPin[record.pin]) {
@@ -69,14 +68,11 @@ const App: React.FC = () => {
         recordsByPin[record.pin].push(record);
       });
       
-      // For each employee, find their last action
       Object.keys(recordsByPin).forEach(pin => {
         const records = recordsByPin[pin];
-        // Sort by time (most recent last)
         records.sort((a, b) => new Date(a.time).getTime() - new Date(b.time).getTime());
         const lastRecord = records[records.length - 1];
         
-        // Convert action to lowercase for consistency with state
         const action = lastRecord.action.charAt(0).toLowerCase() + lastRecord.action.slice(1);
         statusMap[pin] = action;
       });
@@ -123,7 +119,7 @@ const App: React.FC = () => {
     };
   }, [lastInteractionTime]);
 
-  // NEW: Auto-refresh records every 30 seconds when logged in
+  // Auto-refresh records every 30 seconds when logged in
   useEffect(() => {
     if (isLoggedIn) {
       const interval = setInterval(() => {
@@ -259,22 +255,6 @@ const App: React.FC = () => {
     }, 3000);
   }
 
-  function downloadRecords() {
-    fetch('/download-records', { method: 'POST' })
-      .then((response) => response.blob())
-      .then((blob) => {
-        const url = window.URL.createObjectURL(new Blob([blob]));
-        const link = document.createElement('a');
-        link.href = url;
-        link.setAttribute('download', 'time-cards.csv');
-        document.body.appendChild(link);
-        link.click();
-        link.parentNode?.removeChild(link);
-      })
-      .then(() => showMessageToUser('Records downloaded', 'info'))
-      .catch((error) => console.error('Error downloading records:', error));
-  }
-
   const onLoginSuccess = () => {
     setShowLogin(false);
     setShowLoginButton(false);
@@ -337,7 +317,7 @@ const App: React.FC = () => {
       {isLoggedIn && <hr></hr>}
       {isLoggedIn && <TimeCard records={timeCardRecords} />}
       {isLoggedIn && <HoursCalculator />}
-      {!isOverlayShowing && isLoggedIn && <button id="downloadButton" onClick={() => { downloadRecords(); }}>📥 Download Records</button>}
+      {!isOverlayShowing && isLoggedIn && <DownloadRecords showMessageToUser={showMessageToUser} />}
       {!isOverlayShowing && isLoggedIn && <button id="addEmployeeButton" onClick={() => { setShowAddEmployee(true) }}>➕ Add Employee</button>}
       {!isOverlayShowing && isLoggedIn && <button id="logoutButton" onClick={() => { setShowLoginButton(true); setIsLoggedIn(false); }}>🚪 Logout</button>}
     </div>
