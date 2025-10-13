@@ -6,6 +6,7 @@ import AddEmployee from './components/AddEmployee';
 import Login from './components/Login';
 import HoursCalculator from './components/HoursCalculator';
 import DownloadRecords from './components/DownloadRecords';
+import ManualClockOut from './components/ManualClockOut';
 import './assets/css/styles.css';
 
 const App: React.FC = () => {
@@ -17,7 +18,7 @@ const App: React.FC = () => {
   const [pin, setPin] = useState('');
   const [currentTime, setCurrentTime] = useState(new Date().toLocaleString());
   const [showAddEmployee, setShowAddEmployee] = useState(false);
-  const [timeCardRecords, setTimeCardRecords] = useState<{ id: number; name: string; pin: string; action: string; time: string; ip: string }[]>([]);
+  const [timeCardRecords, setTimeCardRecords] = useState<{ id: number; name: string; pin: string; action: string; time: string; ip: string; admin_action?: boolean; note?: string }[]>([]);
   const [employeeStatus, setEmployeeStatus] = useState<{ [pin: string]: string }>({});
   const isOverlayShowing = showCreateAdmin || showLogin || showAddEmployee;
   const [lastInteractionTime, setLastInteractionTime] = useState(new Date());
@@ -278,6 +279,13 @@ const App: React.FC = () => {
     setShowAddEmployee(false);
   };
 
+  const refreshRecords = () => {
+    fetch('/get-records', { method: 'POST' })
+      .then((response) => response.json())
+      .then((records) => setTimeCardRecords(records))
+      .catch((error) => console.error('Error refreshing records:', error));
+  };
+
   return (
     <div className="time-clock-container" ref={timeClockContainerRef} onKeyDown={handleKeyDown} tabIndex={0}>
       <Login showLogin={showLogin} onLoginSuccess={onLoginSuccess} onCloseOverlay={onCloseOverlay} />
@@ -315,6 +323,7 @@ const App: React.FC = () => {
       {showLoginButton && !isLoggedIn && <button id="loginButton" onClick={() => setShowLogin(true)}>
         🔐 Admin Login</button>}
       {isLoggedIn && <hr></hr>}
+      {isLoggedIn && <ManualClockOut records={timeCardRecords} showMessageToUser={showMessageToUser} onClockOutSuccess={refreshRecords} />}
       {isLoggedIn && <TimeCard records={timeCardRecords} />}
       {isLoggedIn && <HoursCalculator />}
       {!isOverlayShowing && isLoggedIn && <DownloadRecords showMessageToUser={showMessageToUser} />}
