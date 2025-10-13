@@ -17,6 +17,7 @@ const PORT = process.env.PORT || 3001;
 const DISCORD_WEBHOOK_URL = process.env.DISCORD_WEBHOOK_URL;
 
 const corsOptions = {
+    origin: true,
     credentials: true,
     optionsSuccessStatus: 204
 };
@@ -24,15 +25,16 @@ app.use(cors(corsOptions));
 app.use(bodyParser.json());
 app.use(express.static(path.join(__dirname, 'dist')));
 
-// Use session middleware
+// Use session middleware - MUST come after CORS
 app.use(session({
     secret: SECRET_KEY,
     resave: false,
     saveUninitialized: false,
     cookie: {
         httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
-        sameSite: 'lax'
+        secure: false, // Set to false for testing
+        sameSite: 'lax',
+        maxAge: 24 * 60 * 60 * 1000 // 24 hours
     }
 }));
 
@@ -281,7 +283,19 @@ app.post('/logout', (req, res) => {
 
 // Route to check if user is logged in
 app.get('/is-logged-in', (req, res) => {
+    console.log('is-logged-in check - Session:', req.session);
+    console.log('is-logged-in - Admin?', req.session?.admin);
     res.json({ isLoggedIn: !!req.session.admin });
+});
+
+// DEBUG ROUTE: Check session status
+app.get('/debug-session', (req, res) => {
+    res.json({
+        hasSession: !!req.session,
+        isAdmin: req.session?.admin,
+        sessionID: req.sessionID,
+        fullSession: req.session
+    });
 });
 
 // Route to add admin
