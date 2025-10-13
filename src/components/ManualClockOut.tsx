@@ -82,6 +82,7 @@ const ManualClockOut: React.FC<ManualClockOutProps> = ({ records, showMessageToU
       const response = await fetch('/manual-clock-out', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify({
           pin: employee.pin,
           time: currentTime,
