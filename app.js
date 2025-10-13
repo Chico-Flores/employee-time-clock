@@ -42,7 +42,7 @@ let requireAdmin = (req, res, next) => {
 };
 
 // Function to send Discord notification
-async function sendDiscordNotification(name, action, time) {
+async function sendDiscordNotification(name, action, time, isAdminAction = false, note = '') {
     if (!DISCORD_WEBHOOK_URL) {
         console.log('Discord webhook not configured, skipping notification');
         return;
@@ -65,10 +65,21 @@ async function sendDiscordNotification(name, action, time) {
 
     const config = actionConfig[action] || { emoji: '⚪', color: 9807270, text: action.toLowerCase() };
 
+    let title = `${config.emoji} ${name} ${config.text}`;
+    let description = `**Time:** ${time}`;
+
+    // Add admin indicator and note if this was an admin action
+    if (isAdminAction) {
+        title = `🔧 ${title} (Admin)`;
+        if (note) {
+            description += `\n**Note:** ${note}`;
+        }
+    }
+
     const discordMessage = {
         embeds: [{
-            title: `${config.emoji} ${name} ${config.text}`,
-            description: `**Time:** ${time}`,
+            title: title,
+            description: description,
             color: config.color,
             timestamp: new Date().toISOString(),
             footer: {
@@ -142,7 +153,7 @@ app.post('/download-records', async (req, res) => {
         }
         
         const records = await db.collection('records').find(query).toArray();
-        const fields = ['name', 'pin', 'action', 'time', 'ip'];
+        const fields = ['name', 'pin', 'action', 'time', 'ip', 'admin_action', 'note'];
         const opts = { fields };
         const csv = json2csv(records, opts);
         res.setHeader('Content-disposition', 'attachment; filename=records.csv');
@@ -176,6 +187,44 @@ app.post('/add-record', async (req, res) => {
 
         // Send Discord notification (non-blocking)
         sendDiscordNotification(name, action, time).catch(console.error);
+
+        res.status(201).json({ id: result.insertedId, name });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// NEW ROUTE: Manual clock out by admin
+app.post('/manual-clock-out', requireAdmin, async (req, res) => {
+    const { pin, time, ip, note } = req.body;
+    
+    try {
+        const db = getDB();
+        const user = await db.collection('users').findOne({ pin });
+        
+        if (!user) {
+            return res.status(400).json({ error: 'No user with this PIN' });
+        }
+        
+        const name = user.name;
+        const recordData = { 
+            name, 
+            pin, 
+            action: 'ClockOut', 
+            time, 
+            ip,
+            admin_action: true
+        };
+
+        // Add note only if provided
+        if (note && note.trim()) {
+            recordData.note = note.trim();
+        }
+
+        const result = await db.collection('records').insertOne(recordData);
+
+        // Send Discord notification with admin flag
+        sendDiscordNotification(name, 'ClockOut', time, true, note).catch(console.error);
 
         res.status(201).json({ id: result.insertedId, name });
     } catch (error) {
