@@ -31,13 +31,21 @@ app.use(session({
     saveUninitialized: false,
     cookie: {
         httpOnly: true,
-        secure: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'lax'
     }
 }));
 
 let requireAdmin = (req, res, next) => {
-    if (!req.session || req.session.admin !== true)
+    console.log('RequireAdmin check - Session:', req.session);
+    console.log('Is admin?', req.session?.admin);
+    
+    if (!req.session || req.session.admin !== true) {
+        console.log('Admin check failed - Unauthorized');
         return res.status(403).json({ error: 'Admin privileges required' });
+    }
+    
+    console.log('Admin check passed');
     next();
 };
 
@@ -198,6 +206,8 @@ app.post('/add-record', async (req, res) => {
 app.post('/manual-clock-out', requireAdmin, async (req, res) => {
     const { pin, time, ip, note } = req.body;
     
+    console.log('Manual clock-out attempt - Session:', req.session);
+    
     try {
         const db = getDB();
         const user = await db.collection('users').findOne({ pin });
@@ -228,6 +238,7 @@ app.post('/manual-clock-out', requireAdmin, async (req, res) => {
 
         res.status(201).json({ id: result.insertedId, name });
     } catch (error) {
+        console.error('Manual clock-out error:', error);
         res.status(500).json({ error: error.message });
     }
 });
