@@ -55,7 +55,7 @@ const TimeCard: React.FC<TimeCardProps> = ({ records }) => {
                 <tr 
                   key={idx}
                   style={{ 
-                    backgroundColor: record.admin_action 
+                    backgroundColor: record.admin_action === true
                       ? '#fef3c7' 
                       : (uniqueIps[pin].size > 1 ? 'yellow' : 'transparent')
                   }}
