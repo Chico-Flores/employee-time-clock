@@ -280,7 +280,10 @@ const App: React.FC = () => {
   };
 
   const refreshRecords = () => {
-    fetch('/get-records', { method: 'POST' })
+    fetch('/get-records', { 
+      method: 'POST',
+      credentials: 'include'
+    })
       .then((response) => response.json())
       .then((records) => setTimeCardRecords(records))
       .catch((error) => console.error('Error refreshing records:', error));
