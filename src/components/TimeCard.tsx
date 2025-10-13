@@ -7,6 +7,8 @@ interface Record {
   action: string;
   time: string;
   ip: string;
+  admin_action?: boolean;
+  note?: string;
 }
 
 interface TimeCardProps {
@@ -50,12 +52,32 @@ const TimeCard: React.FC<TimeCardProps> = ({ records }) => {
             </thead>
             <tbody>
               {data.records.map((record, idx) => (
-                <tr key={idx}>
-                  <td>{record.action}</td>
-                  <td>{record.time}</td>
-                  <td style={{ backgroundColor: uniqueIps[pin].size > 1 ? 'yellow' : 'transparent' }}>
-                    {record.ip}
+                <tr 
+                  key={idx}
+                  style={{ 
+                    backgroundColor: record.admin_action 
+                      ? '#fef3c7' 
+                      : (uniqueIps[pin].size > 1 ? 'yellow' : 'transparent')
+                  }}
+                >
+                  <td>
+                    {record.admin_action && '🔧 '}
+                    {record.action}
+                    {record.admin_action && <span style={{ color: '#92400e', fontSize: '0.85em', fontStyle: 'italic' }}> (Admin)</span>}
+                    {record.note && (
+                      <div style={{ 
+                        fontSize: '0.85em', 
+                        color: '#6b7280', 
+                        fontStyle: 'italic', 
+                        marginTop: '4px',
+                        paddingLeft: '20px'
+                      }}>
+                        Note: {record.note}
+                      </div>
+                    )}
                   </td>
+                  <td>{record.time}</td>
+                  <td>{record.ip}</td>
                 </tr>
               ))}
             </tbody>
