@@ -16,17 +16,33 @@ const App: React.FC = () => {
   const [showLoginButton, setShowLoginButton] = useState(false);
   const [showCreateAdmin, setShowCreateAdmin] = useState(false);
   const [pin, setPin] = useState('');
-  const [currentTime, setCurrentTime] = useState(new Date().toLocaleString());
+  const [currentTime, setCurrentTime] = useState('');
   const [showAddEmployee, setShowAddEmployee] = useState(false);
   const [timeCardRecords, setTimeCardRecords] = useState<{ id: number; name: string; pin: string; action: string; time: string; ip: string; admin_action?: boolean; note?: string }[]>([]);
   const [employeeStatus, setEmployeeStatus] = useState<{ [pin: string]: string }>({});
   const isOverlayShowing = showCreateAdmin || showLogin || showAddEmployee;
   const [lastInteractionTime, setLastInteractionTime] = useState(new Date());
 
+  // Function to get PST time
+  const getPSTTime = () => {
+    const date = new Date();
+    return date.toLocaleString('en-US', {
+      timeZone: 'America/Los_Angeles',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: true
+    });
+  };
+
   useEffect(() => {
-    const timer = setInterval(() => {
-      setCurrentTime(new Date().toLocaleString());
-    }, 1000);
+    // Update clock to PST every second
+    const updateTime = () => setCurrentTime(getPSTTime());
+    updateTime(); // Initial call
+    const timer = setInterval(updateTime, 1000);
     return () => clearInterval(timer);
   }, []);
 
@@ -213,7 +229,9 @@ const App: React.FC = () => {
       return;
     }
 
-    const record = { action: selectedAction.charAt(0).toUpperCase() + selectedAction.slice(1), time: currentTime };
+    // Use PST time
+    const pstTime = getPSTTime();
+    const record = { action: selectedAction.charAt(0).toUpperCase() + selectedAction.slice(1), time: pstTime };
 
     let ipResponse = await fetch('https://api.ipify.org?format=json');
     let ipData = await ipResponse.json();
