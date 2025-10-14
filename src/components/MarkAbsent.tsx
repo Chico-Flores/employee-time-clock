@@ -144,7 +144,8 @@ const MarkAbsent: React.FC<MarkAbsentProps> = ({ showMessageToUser, onMarkAbsent
       borderRadius: '20px', 
       padding: '2rem', 
       margin: '2rem auto', 
-      maxWidth: '800px', 
+      maxWidth: '1400px',
+      width: '95%',
       boxShadow: '0 20px 60px rgba(0, 0, 0, 0.3)' 
     }}>
       <h2 style={{ color: '#1e3a8a', marginBottom: '10px', fontSize: '1.8rem' }}>📅 Mark Employee Absent</h2>
