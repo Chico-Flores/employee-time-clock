@@ -7,6 +7,7 @@ const json2csv = require('json2csv').parse;
 const path = require('path');
 const cors = require('cors');
 const session = require('express-session');
+const MongoStore = require('connect-mongo');
 
 // Secret key for session, randomly generated
 let SECRET_KEY = crypto.randomBytes(32).toString('hex');
@@ -15,6 +16,8 @@ let SECRET_KEY = crypto.randomBytes(32).toString('hex');
 const app = express();
 const PORT = process.env.PORT || 3001;
 const DISCORD_WEBHOOK_URL = process.env.DISCORD_WEBHOOK_URL;
+const MONGODB_URI = process.env.MONGODB_URI || 'mongodb+srv://timeclockuser:Pckings9$@timeclock.awtl8gt.mongodb.net/?retryWrites=true&w=majority&appName=timeclock';
+const DB_NAME = 'timeclock';
 
 const corsOptions = {
     origin: true,
@@ -25,11 +28,17 @@ app.use(cors(corsOptions));
 app.use(bodyParser.json());
 app.use(express.static(path.join(__dirname, 'dist')));
 
-// Use session middleware - MUST come after CORS
+// Use session middleware with MongoDB store - MUST come after CORS
 app.use(session({
     secret: SECRET_KEY,
     resave: false,
     saveUninitialized: false,
+    store: MongoStore.create({
+        mongoUrl: MONGODB_URI,
+        dbName: DB_NAME,
+        collectionName: 'sessions',
+        touchAfter: 24 * 3600 // lazy session update (seconds)
+    }),
     cookie: {
         httpOnly: true,
         secure: false,
