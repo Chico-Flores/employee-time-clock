@@ -51,35 +51,41 @@ const TimeCard: React.FC<TimeCardProps> = ({ records }) => {
               </tr>
             </thead>
             <tbody>
-              {data.records.map((record, idx) => (
-                <tr 
-                  key={idx}
-                  style={{ 
-                    backgroundColor: record.admin_action === true
-                      ? '#fef3c7' 
-                      : (uniqueIps[pin].size > 1 ? 'yellow' : 'transparent')
-                  }}
-                >
-                  <td>
-                    {record.admin_action && '🔧 '}
-                    {record.action}
-                    {record.admin_action && <span style={{ color: '#92400e', fontSize: '0.85em', fontStyle: 'italic' }}> (Admin)</span>}
-                    {record.note && (
-                      <div style={{ 
-                        fontSize: '0.85em', 
-                        color: '#6b7280', 
-                        fontStyle: 'italic', 
-                        marginTop: '4px',
-                        paddingLeft: '20px'
-                      }}>
-                        Note: {record.note}
-                      </div>
-                    )}
-                  </td>
-                  <td>{record.time}</td>
-                  <td>{record.ip}</td>
-                </tr>
-              ))}
+              {data.records.map((record, idx) => {
+                // Determine background color
+                let bgColor = 'transparent';
+                if (record.action === 'Absent') {
+                  bgColor = '#fee2e2'; // Light red for absences
+                } else if (record.admin_action === true) {
+                  bgColor = '#fef3c7'; // Light yellow for admin actions
+                } else if (uniqueIps[pin].size > 1) {
+                  bgColor = 'yellow'; // Yellow for multiple IPs
+                }
+
+                return (
+                  <tr key={idx} style={{ backgroundColor: bgColor }}>
+                    <td>
+                      {record.action === 'Absent' && '❌ '}
+                      {record.admin_action && record.action !== 'Absent' && '🔧 '}
+                      {record.action}
+                      {record.admin_action && <span style={{ color: '#92400e', fontSize: '0.85em', fontStyle: 'italic' }}> (Admin)</span>}
+                      {record.note && (
+                        <div style={{ 
+                          fontSize: '0.85em', 
+                          color: '#6b7280', 
+                          fontStyle: 'italic', 
+                          marginTop: '4px',
+                          paddingLeft: '20px'
+                        }}>
+                          Note: {record.note}
+                        </div>
+                      )}
+                    </td>
+                    <td>{record.time}</td>
+                    <td>{record.ip}</td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>
