@@ -65,6 +65,12 @@ const App: React.FC = () => {
                   .catch((error) => console.error('Error checking records:', error));
               }
             })
+        } else {
+          // If already logged in, fetch records immediately
+          fetch('/get-records', { method: 'POST' })
+            .then((response) => response.json())
+            .then((records) => setTimeCardRecords(records))
+            .catch((error) => console.error('Error loading records:', error));
         }
       })
       .catch((error) => console.error('Error checking login status:', error));
