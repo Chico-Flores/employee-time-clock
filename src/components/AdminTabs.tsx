@@ -78,6 +78,7 @@ const AdminTabs: React.FC<AdminTabsProps> = ({
             <AddEmployee 
               onAddSuccess={onAddEmployeeSuccess} 
               onCloseOverlay={() => {}} 
+              inline={true}
             />
           </div>
         )}
