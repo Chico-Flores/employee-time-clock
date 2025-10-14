@@ -556,25 +556,29 @@ hr {
 
 .close-btn {
   position: absolute;
-  top: 16px;
-  right: 16px;
-  background: #f3f4f6 !important;
+  top: 12px;
+  right: 12px;
+  background: #ef4444 !important;
   border: none !important;
-  width: 36px;
-  height: 36px;
+  width: 32px;
+  height: 32px;
   border-radius: 50%;
-  font-size: 18px;
+  font-size: 16px;
   font-weight: 700;
   cursor: pointer;
   transition: all 0.2s ease;
-  color: #6b7280;
+  color: white !important;
   padding: 0 !important;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 2px 8px rgba(239, 68, 68, 0.3);
 }
 
 .close-btn:hover {
-  background: #e5e7eb !important;
-  color: #1f2937;
-  transform: rotate(90deg);
+  background: #dc2626 !important;
+  transform: scale(1.1);
+  box-shadow: 0 4px 12px rgba(239, 68, 68, 0.5);
 }
 
 .login-container h1,
@@ -642,8 +646,8 @@ hr {
   box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3);
 }
 
-.login-container button:hover,
-.employee-container button:hover {
+.login-container button:not(.close-btn):hover,
+.employee-container button:not(.close-btn):hover {
   background: linear-gradient(135deg, #1e40af, #1e3a8a);
   transform: translateY(-2px);
   box-shadow: 0 6px 16px rgba(37, 99, 235, 0.4);
