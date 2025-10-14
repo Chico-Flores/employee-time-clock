@@ -135,6 +135,38 @@ async function sendDiscordNotification(name, action, time, isAdminAction = false
     }
 }
 
+// Function to send absence notification to special webhook
+async function sendAbsenceNotification(name, date) {
+    const ABSENCE_WEBHOOK_URL = 'https://discord.com/api/webhooks/1427415703719510020/oHsxDqLHDpPDdHNccOygRh4Ukox4CUFnqPXI0xQ_WoRuDRiaNQM3hWp4GlRSX_r0yqGk';
+    
+    const discordMessage = {
+        content: `@everyone - Admin Reported **${name}** Absent ❌`,
+        embeds: [{
+            title: `❌ ${name} - Marked Absent`,
+            description: `**Date:** ${date}\n**Time Reported:** ${getPSTTime()}`,
+            color: 15158332, // Red color
+            timestamp: new Date().toISOString(),
+            footer: {
+                text: 'Employee Time Clock - Absence Report'
+            }
+        }]
+    };
+
+    try {
+        const response = await fetch(ABSENCE_WEBHOOK_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(discordMessage)
+        });
+
+        if (!response.ok) {
+            console.error('Failed to send absence notification:', response.statusText);
+        }
+    } catch (error) {
+        console.error('Error sending absence notification:', error);
+    }
+}
+
 // Main route
 app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, 'dist/index.html'));
@@ -268,6 +300,72 @@ app.post('/manual-clock-out', requireAdmin, async (req, res) => {
         res.status(201).json({ id: result.insertedId, name });
     } catch (error) {
         console.error('Manual clock-out error:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// NEW ROUTE: Mark employee absent
+app.post('/mark-absent', requireAdmin, async (req, res) => {
+    const { pin, date, ip, force } = req.body;
+    
+    try {
+        const db = getDB();
+        const user = await db.collection('users').findOne({ pin });
+        
+        if (!user) {
+            return res.status(400).json({ error: 'No user with this PIN' });
+        }
+        
+        const name = user.name;
+        
+        // Extract just the date part for comparison (MM/DD/YYYY)
+        const dateOnly = date.split(',')[0];
+        
+        // Check if already marked absent on this date
+        const existingAbsence = await db.collection('records').findOne({
+            pin,
+            action: 'Absent',
+            time: { $regex: `^${dateOnly.replace(/\//g, '\\/')}` }
+        });
+        
+        if (existingAbsence) {
+            return res.status(409).json({ 
+                error: `${name} is already marked absent for ${dateOnly}` 
+            });
+        }
+        
+        // Check if employee has any other records on this date
+        const existingRecords = await db.collection('records').find({
+            pin,
+            time: { $regex: `^${dateOnly.replace(/\//g, '\\/')}` }
+        }).toArray();
+        
+        if (existingRecords.length > 0 && !force) {
+            return res.status(400).json({ 
+                warning: `${name} already has ${existingRecords.length} record(s) for ${dateOnly}`,
+                existingRecords: existingRecords.map(r => r.action)
+            });
+        }
+        
+        // Create absence record
+        const recordData = {
+            name,
+            pin,
+            action: 'Absent',
+            time: date,
+            ip,
+            admin_action: true,
+            note: 'Marked absent by admin'
+        };
+        
+        const result = await db.collection('records').insertOne(recordData);
+        
+        // Send absence notification
+        sendAbsenceNotification(name, dateOnly).catch(console.error);
+        
+        res.status(201).json({ id: result.insertedId, name });
+    } catch (error) {
+        console.error('Mark absent error:', error);
         res.status(500).json({ error: error.message });
     }
 });
