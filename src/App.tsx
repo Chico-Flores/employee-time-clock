@@ -321,9 +321,6 @@ const App: React.FC = () => {
       <h1>Employee Time Clock</h1>
       <div id="currentTime">{currentTime}</div>
       
-      {/* Dashboard Stats - Only show when logged in */}
-      {isLoggedIn && <DashboardStats records={timeCardRecords} employeeStatus={employeeStatus} />}
-      
       <div className="pin-entry">
         <div id="currentPin">Enter PIN: {pin || '____'}</div>
         <button className="clear-button" onClick={handleClear}>Clear PIN</button>
@@ -346,6 +343,9 @@ const App: React.FC = () => {
           <button onClick={() => handleActionClick('endMeeting')}>✅ End Meeting</button>
         </div>
       </div>
+      
+      {/* Dashboard Stats - Show below action buttons when logged in */}
+      {isLoggedIn && <DashboardStats records={timeCardRecords} employeeStatus={employeeStatus} />}
       {showLoginButton && !isLoggedIn && <button id="loginButton" onClick={() => setShowLogin(true)}>
         🔓 Admin Login</button>}
       {isLoggedIn && <hr></hr>}
