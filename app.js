@@ -32,7 +32,7 @@ app.use(session({
     saveUninitialized: false,
     cookie: {
         httpOnly: true,
-        secure: false, // Set to false for testing
+        secure: false,
         sameSite: 'lax',
         maxAge: 24 * 60 * 60 * 1000 // 24 hours
     }
@@ -50,6 +50,28 @@ let requireAdmin = (req, res, next) => {
     console.log('Admin check passed');
     next();
 };
+
+// Helper function to get current PST time as formatted string
+function getPSTTime() {
+    const date = new Date();
+    
+    // Convert to PST (America/Los_Angeles)
+    const pstDate = new Date(date.toLocaleString('en-US', { 
+        timeZone: 'America/Los_Angeles' 
+    }));
+    
+    // Format: MM/DD/YYYY, HH:MM:SS AM/PM
+    return pstDate.toLocaleString('en-US', {
+        timeZone: 'America/Los_Angeles',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+        hour12: true
+    });
+}
 
 // Function to send Discord notification
 async function sendDiscordNotification(name, action, time, isAdminAction = false, note = '') {
@@ -76,7 +98,7 @@ async function sendDiscordNotification(name, action, time, isAdminAction = false
     const config = actionConfig[action] || { emoji: '⚪', color: 9807270, text: action.toLowerCase() };
 
     let title = `${config.emoji} ${name} ${config.text}`;
-    let description = `**Time:** ${time}`;
+    let description = `**Time (PST):** ${time}`;
 
     // Add admin indicator and note if this was an admin action
     if (isAdminAction) {
@@ -93,7 +115,7 @@ async function sendDiscordNotification(name, action, time, isAdminAction = false
             color: config.color,
             timestamp: new Date().toISOString(),
             footer: {
-                text: 'Employee Time Clock'
+                text: 'Employee Time Clock (PST)'
             }
         }]
     };
@@ -116,6 +138,11 @@ async function sendDiscordNotification(name, action, time, isAdminAction = false
 // Main route
 app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, 'dist/index.html'));
+});
+
+// NEW ROUTE: Get current PST time
+app.get('/get-pst-time', (req, res) => {
+    res.json({ time: getPSTTime() });
 });
 
 // Route to get records
@@ -153,12 +180,12 @@ app.post('/download-records', async (req, res) => {
             if (startDate) {
                 const start = new Date(startDate);
                 start.setHours(0, 0, 0, 0);
-                query.time.$gte = start.toLocaleString();
+                query.time.$gte = start.toLocaleString('en-US', { timeZone: 'America/Los_Angeles' });
             }
             if (endDate) {
                 const end = new Date(endDate);
                 end.setHours(23, 59, 59, 999);
-                query.time.$lte = end.toLocaleString();
+                query.time.$lte = end.toLocaleString('en-US', { timeZone: 'America/Los_Angeles' });
             }
         }
         
@@ -358,6 +385,8 @@ app.post('/add-employee', async (req, res) => {
 connectDB().then(() => {
     app.listen(PORT, '0.0.0.0', () => {
         console.log(`✅ Server running on port ${PORT}`);
+        console.log(`🕐 Server time zone: PST (America/Los_Angeles)`);
+        console.log(`🕐 Current PST time: ${getPSTTime()}`);
     });
 }).catch(error => {
     console.error('❌ Failed to start server:', error);
