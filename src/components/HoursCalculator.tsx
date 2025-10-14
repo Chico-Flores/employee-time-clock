@@ -114,6 +114,11 @@ const HoursCalculator: React.FC = () => {
       emp.events.forEach((event: any) => {
         const { action, time } = event;
         
+        // Skip absent records in calculations
+        if (action === 'Absent') {
+          return;
+        }
+        
         if (action === 'ClockIn') {
           currentClockIn = time;
         } else if (action === 'ClockOut') {
@@ -331,6 +336,7 @@ const HoursCalculator: React.FC = () => {
               <li><strong>Paid Hours</strong> = Total Work Time - Break Time - Lunch Time</li>
               <li><strong>Lunch & Breaks:</strong> SUBTRACTED (unpaid time)</li>
               <li><strong>Restroom, IT Issues, Meetings:</strong> INCLUDED in paid time (tracked for reporting)</li>
+              <li><strong>Absent Days:</strong> EXCLUDED from calculations (not counted as work time)</li>
               <li>IT Issues over 1 hour are highlighted in red</li>
             </ul>
           </div>
