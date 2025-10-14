@@ -29,22 +29,34 @@ app.use(bodyParser.json());
 app.use(express.static(path.join(__dirname, 'dist')));
 
 // Use session middleware with MongoDB store - MUST come after CORS
+const sessionStore = MongoStore.create({
+    mongoUrl: MONGODB_URI,
+    dbName: DB_NAME,
+    collectionName: 'sessions',
+    touchAfter: 24 * 3600, // lazy session update (seconds)
+    crypto: {
+        secret: SECRET_KEY
+    }
+});
+
+// Handle session store errors
+sessionStore.on('error', (error) => {
+    console.error('Session store error:', error);
+});
+
 app.use(session({
     secret: SECRET_KEY,
     resave: false,
     saveUninitialized: false,
-    store: MongoStore.create({
-        mongoUrl: MONGODB_URI,
-        dbName: DB_NAME,
-        collectionName: 'sessions',
-        touchAfter: 24 * 3600 // lazy session update (seconds)
-    }),
+    store: sessionStore,
     cookie: {
         httpOnly: true,
-        secure: false,
+        secure: false, // set to true if using HTTPS
         sameSite: 'lax',
         maxAge: 24 * 60 * 60 * 1000 // 24 hours
-    }
+    },
+    rolling: true, // Reset maxAge on every request
+    name: 'timeclock.sid' // Custom session name
 }));
 
 let requireAdmin = (req, res, next) => {
@@ -410,7 +422,11 @@ app.post('/login', async (req, res) => {
 // Route to logout
 app.post('/logout', (req, res) => {
     req.session.destroy((err) => {
-        if (err) return res.status(500).json({ error: err.message });
+        if (err) {
+            console.error('Logout error:', err);
+            return res.status(500).json({ error: err.message });
+        }
+        res.clearCookie('connect.sid'); // Clear the session cookie
         res.json({ success: true });
     });
 });
@@ -419,7 +435,15 @@ app.post('/logout', (req, res) => {
 app.get('/is-logged-in', (req, res) => {
     console.log('is-logged-in check - Session:', req.session);
     console.log('is-logged-in - Admin?', req.session?.admin);
-    res.json({ isLoggedIn: !!req.session.admin });
+    console.log('Session ID:', req.sessionID);
+    
+    // If session exists and admin is true, return logged in
+    if (req.session && req.session.admin === true) {
+        return res.json({ isLoggedIn: true });
+    }
+    
+    // Otherwise not logged in
+    res.json({ isLoggedIn: false });
 });
 
 // DEBUG ROUTE: Check session status
