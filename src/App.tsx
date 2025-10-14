@@ -346,6 +346,7 @@ const App: React.FC = () => {
         🔐 Admin Login</button>}
       {isLoggedIn && <hr></hr>}
       {isLoggedIn && <ManualClockOut records={timeCardRecords} showMessageToUser={showMessageToUser} onClockOutSuccess={refreshRecords} />}
+      {isLoggedIn && <MarkAbsent showMessageToUser={showMessageToUser} onMarkAbsentSuccess={refreshRecords} />}
       {isLoggedIn && <TimeCard records={timeCardRecords} />}
       {isLoggedIn && <HoursCalculator />}
       {!isOverlayShowing && isLoggedIn && <DownloadRecords showMessageToUser={showMessageToUser} />}
