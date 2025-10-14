@@ -74,15 +74,30 @@ const ManualClockOut: React.FC<ManualClockOutProps> = ({ records, showMessageToU
 
   const handleClockOut = async (employee: Employee) => {
     try {
-      const currentTime = new Date().toLocaleString();
+      // Get PST time
+      const date = new Date();
+      const currentTime = date.toLocaleString('en-US', {
+        timeZone: 'America/Los_Angeles',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+        hour12: true
+      });
+      
+      // Get IP first
       const ipResponse = await fetch('https://api.ipify.org?format=json');
       const ipData = await ipResponse.json();
       const ip = ipData.ip;
 
+      // Then make the clock-out request
       const response = await fetch('/manual-clock-out', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
+        headers: { 
+          'Content-Type': 'application/json'
+        },
         body: JSON.stringify({
           pin: employee.pin,
           time: currentTime,
@@ -91,15 +106,17 @@ const ManualClockOut: React.FC<ManualClockOutProps> = ({ records, showMessageToU
         })
       });
 
+      const data = await response.json();
+
       if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error);
+        throw new Error(data.error || 'Clock out failed');
       }
 
       showMessageToUser(`${employee.name} clocked out successfully`, 'success');
       setNotes({ ...notes, [employee.pin]: '' }); // Clear note
       onClockOutSuccess(); // Refresh records
     } catch (error: any) {
+      console.error('Clock out error:', error);
       showMessageToUser(`Error clocking out: ${error.message}`, 'error');
     }
   };
