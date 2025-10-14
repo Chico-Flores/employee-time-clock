@@ -345,11 +345,18 @@ const App: React.FC = () => {
       {showLoginButton && !isLoggedIn && <button id="loginButton" onClick={() => setShowLogin(true)}>
         🔓 Admin Login</button>}
       {isLoggedIn && <hr></hr>}
-      {isLoggedIn && <ManualClockOut records={timeCardRecords} showMessageToUser={showMessageToUser} onClockOutSuccess={refreshRecords} />}
-      {isLoggedIn && <MarkAbsent showMessageToUser={showMessageToUser} onMarkAbsentSuccess={refreshRecords} />}
-      {isLoggedIn && <TimeCard records={timeCardRecords} />}
-      {isLoggedIn && <HoursCalculator />}
-      {!isOverlayShowing && isLoggedIn && <DownloadRecords showMessageToUser={showMessageToUser} />}
+      
+      {/* Admin Tabs - Contains all admin sections */}
+      {isLoggedIn && (
+        <AdminTabs 
+          records={timeCardRecords}
+          showMessageToUser={showMessageToUser}
+          onRecordsUpdate={refreshRecords}
+          onAddEmployeeSuccess={onAddEmployeeSuccess}
+        />
+      )}
+      
+      {/* Keep Add Employee popup button for quick access */}
       {!isOverlayShowing && isLoggedIn && <button id="addEmployeeButton" onClick={() => { setShowAddEmployee(true) }}>➕ Add Employee</button>}
       {!isOverlayShowing && isLoggedIn && <button id="logoutButton" onClick={() => { setShowLoginButton(true); setIsLoggedIn(false); }}>🚪 Logout</button>}
     </div>
