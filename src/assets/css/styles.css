@@ -630,8 +630,8 @@ hr {
   border-left: 4px solid #ef4444;
 }
 
-.login-container button,
-.employee-container button {
+.login-container button:not(.close-btn),
+.employee-container button:not(.close-btn) {
   width: 100%;
   background: linear-gradient(135deg, #2563eb, #1e40af);
   color: white;
