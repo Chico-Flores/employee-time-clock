@@ -8,6 +8,7 @@ import HoursCalculator from './components/HoursCalculator';
 import DownloadRecords from './components/DownloadRecords';
 import ManualClockOut from './components/ManualClockOut';
 import MarkAbsent from './components/MarkAbsent';
+import DashboardStats from './components/DashboardStats';
 import './assets/css/styles.css';
 
 const App: React.FC = () => {
@@ -320,6 +321,9 @@ const App: React.FC = () => {
       <h1>Employee Time Clock</h1>
       <div id="currentTime">{currentTime}</div>
       
+      {/* Dashboard Stats - Only show when logged in */}
+      {isLoggedIn && <DashboardStats records={timeCardRecords} employeeStatus={employeeStatus} />}
+      
       <div className="pin-entry">
         <div id="currentPin">Enter PIN: {pin || '____'}</div>
         <button className="clear-button" onClick={handleClear}>Clear PIN</button>
@@ -343,7 +347,7 @@ const App: React.FC = () => {
         </div>
       </div>
       {showLoginButton && !isLoggedIn && <button id="loginButton" onClick={() => setShowLogin(true)}>
-        🔐 Admin Login</button>}
+        🔓 Admin Login</button>}
       {isLoggedIn && <hr></hr>}
       {isLoggedIn && <ManualClockOut records={timeCardRecords} showMessageToUser={showMessageToUser} onClockOutSuccess={refreshRecords} />}
       {isLoggedIn && <MarkAbsent showMessageToUser={showMessageToUser} onMarkAbsentSuccess={refreshRecords} />}
