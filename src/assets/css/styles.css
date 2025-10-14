@@ -745,6 +745,11 @@ hr {
   .tab-btn {
     min-width: calc(50% - 4px);
   }
+
+  /* Manual Clock Out - Stack on mobile */
+  .employee-grid {
+    grid-template-columns: 1fr !important;
+  }
 }
 
 @media (max-width: 768px) {
