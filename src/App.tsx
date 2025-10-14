@@ -7,6 +7,7 @@ import Login from './components/Login';
 import HoursCalculator from './components/HoursCalculator';
 import DownloadRecords from './components/DownloadRecords';
 import ManualClockOut from './components/ManualClockOut';
+import MarkAbsent from './components/MarkAbsent';
 import './assets/css/styles.css';
 
 const App: React.FC = () => {
