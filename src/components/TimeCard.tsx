@@ -52,14 +52,19 @@ const TimeCard: React.FC<TimeCardProps> = ({ records }) => {
             </thead>
             <tbody>
               {data.records.map((record, idx) => {
-                // Determine background color
-                let bgColor = 'transparent';
+                // Determine background color priority:
+                // 1. Absent = light red
+                // 2. Admin action (not absent) = light yellow
+                // 3. Multiple IPs for this employee = yellow
+                // 4. Default = white
+                let bgColor = 'white';
+                
                 if (record.action === 'Absent') {
                   bgColor = '#fee2e2'; // Light red for absences
                 } else if (record.admin_action === true) {
                   bgColor = '#fef3c7'; // Light yellow for admin actions
                 } else if (uniqueIps[pin].size > 1) {
-                  bgColor = 'yellow'; // Yellow for multiple IPs
+                  bgColor = '#fef08a'; // Brighter yellow for multiple IPs (suspicious)
                 }
 
                 return (
@@ -82,7 +87,19 @@ const TimeCard: React.FC<TimeCardProps> = ({ records }) => {
                       )}
                     </td>
                     <td>{record.time}</td>
-                    <td>{record.ip}</td>
+                    <td>
+                      {record.ip}
+                      {uniqueIps[pin].size > 1 && (
+                        <span style={{ 
+                          marginLeft: '8px', 
+                          fontSize: '0.8em', 
+                          color: '#d97706',
+                          fontWeight: 'bold'
+                        }}>
+                          ⚠️ Multiple IPs
+                        </span>
+                      )}
+                    </td>
                   </tr>
                 );
               })}
