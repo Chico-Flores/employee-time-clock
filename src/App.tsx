@@ -1,14 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
 import Keypad from './components/Keypad';
-import TimeCard from './components/TimeCard';
 import CreateAdmin from './components/CreateAdmin';
 import AddEmployee from './components/AddEmployee';
 import Login from './components/Login';
-import HoursCalculator from './components/HoursCalculator';
-import DownloadRecords from './components/DownloadRecords';
-import ManualClockOut from './components/ManualClockOut';
-import MarkAbsent from './components/MarkAbsent';
 import DashboardStats from './components/DashboardStats';
+import AdminTabs from './components/AdminTabs';
 import './assets/css/styles.css';
 
 const App: React.FC = () => {
