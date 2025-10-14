@@ -192,7 +192,15 @@ const HoursCalculator: React.FC = () => {
   };
 
   return (
-    <div style={{ background: 'white', borderRadius: '20px', padding: '2rem', margin: '2rem auto', maxWidth: '1400px', boxShadow: '0 20px 60px rgba(0, 0, 0, 0.3)' }}>
+    <div style={{ 
+      background: 'white', 
+      borderRadius: '20px', 
+      padding: '2rem', 
+      margin: '2rem auto', 
+      maxWidth: '1400px',
+      width: '95%',
+      boxShadow: '0 20px 60px rgba(0, 0, 0, 0.3)' 
+    }}>
       <h2 style={{ color: '#1e3a8a', marginBottom: '10px', fontSize: '1.8rem' }}>📊 Hours Calculator</h2>
       <p style={{ color: '#666', marginBottom: '30px' }}>Upload your downloaded CSV to calculate payroll hours</p>
       
