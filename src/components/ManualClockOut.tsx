@@ -16,6 +16,7 @@ interface ManualClockOutProps {
 const ManualClockOut: React.FC<ManualClockOutProps> = ({ records, showMessageToUser, onClockOutSuccess }) => {
   const [currentlyWorking, setCurrentlyWorking] = useState<Employee[]>([]);
   const [notes, setNotes] = useState<{ [pin: string]: string }>({});
+  const [loading, setLoading] = useState<{ [pin: string]: boolean }>({});
 
   useEffect(() => {
     updateCurrentlyWorking();
@@ -73,6 +74,8 @@ const ManualClockOut: React.FC<ManualClockOutProps> = ({ records, showMessageToU
   };
 
   const handleClockOut = async (employee: Employee) => {
+    setLoading({ ...loading, [employee.pin]: true });
+    
     try {
       // Get PST time
       const date = new Date();
@@ -118,6 +121,8 @@ const ManualClockOut: React.FC<ManualClockOutProps> = ({ records, showMessageToU
     } catch (error: any) {
       console.error('Clock out error:', error);
       showMessageToUser(`Error clocking out: ${error.message}`, 'error');
+    } finally {
+      setLoading({ ...loading, [employee.pin]: false });
     }
   };
 
@@ -126,13 +131,16 @@ const ManualClockOut: React.FC<ManualClockOutProps> = ({ records, showMessageToU
       <div style={{ 
         background: 'white', 
         borderRadius: '20px', 
-        padding: '2rem', 
-        margin: '2rem auto', 
-        maxWidth: '1400px', 
-        boxShadow: '0 20px 60px rgba(0, 0, 0, 0.3)' 
+        padding: '3rem', 
+        margin: '0 auto', 
+        maxWidth: '1400px',
+        width: '95%',
+        boxShadow: '0 20px 60px rgba(0, 0, 0, 0.3)',
+        textAlign: 'center'
       }}>
+        <div style={{ fontSize: '64px', marginBottom: '1rem', opacity: 0.3 }}>🏠</div>
         <h2 style={{ color: '#1e3a8a', marginBottom: '10px', fontSize: '1.8rem' }}>🔧 Manual Clock Out</h2>
-        <p style={{ color: '#666' }}>No employees are currently clocked in.</p>
+        <p style={{ color: '#6b7280', fontSize: '1.1rem' }}>No employees are currently clocked in.</p>
       </div>
     );
   }
@@ -142,97 +150,217 @@ const ManualClockOut: React.FC<ManualClockOutProps> = ({ records, showMessageToU
       background: 'white', 
       borderRadius: '20px', 
       padding: '2rem', 
-      margin: '2rem auto', 
+      margin: '0 auto', 
       maxWidth: '1400px',
       width: '95%',
       boxShadow: '0 20px 60px rgba(0, 0, 0, 0.3)' 
     }}>
-      <h2 style={{ color: '#1e3a8a', marginBottom: '10px', fontSize: '1.8rem' }}>🔧 Manual Clock Out</h2>
-      <p style={{ color: '#666', marginBottom: '20px' }}>Clock out employees who forgot or were sent home early</p>
+      <div style={{ marginBottom: '2rem' }}>
+        <h2 style={{ color: '#1e3a8a', marginBottom: '10px', fontSize: '1.8rem' }}>🔧 Manual Clock Out</h2>
+        <p style={{ color: '#6b7280', marginBottom: '8px' }}>
+          Clock out employees who forgot or were sent home early
+        </p>
+        <p style={{ color: '#059669', fontWeight: '600', fontSize: '0.95rem' }}>
+          {currentlyWorking.length} {currentlyWorking.length === 1 ? 'employee' : 'employees'} currently working
+        </p>
+      </div>
 
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
+      <div style={{ 
+        display: 'grid', 
+        gridTemplateColumns: 'repeat(auto-fill, minmax(380px, 1fr))',
+        gap: '20px' 
+      }}>
         {currentlyWorking.map((employee) => (
           <div key={employee.pin} style={{
             border: '2px solid #e5e7eb',
-            borderRadius: '12px',
-            padding: '20px',
-            background: '#f9fafb'
+            borderRadius: '16px',
+            padding: '24px',
+            background: 'linear-gradient(135deg, #f9fafb 0%, #ffffff 100%)',
+            transition: 'all 0.3s ease',
+            position: 'relative',
+            overflow: 'hidden'
+          }}
+          onMouseOver={(e) => {
+            e.currentTarget.style.borderColor = '#3b82f6';
+            e.currentTarget.style.transform = 'translateY(-4px)';
+            e.currentTarget.style.boxShadow = '0 12px 24px rgba(0, 0, 0, 0.1)';
+          }}
+          onMouseOut={(e) => {
+            e.currentTarget.style.borderColor = '#e5e7eb';
+            e.currentTarget.style.transform = 'translateY(0)';
+            e.currentTarget.style.boxShadow = 'none';
           }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '15px' }}>
-              <div style={{ flex: '1', minWidth: '250px' }}>
-                <h3 style={{ margin: '0 0 8px 0', color: '#1e3a8a', fontSize: '1.2rem' }}>
-                  {employee.name} <span style={{ color: '#6b7280', fontSize: '0.9rem' }}>({employee.pin})</span>
-                </h3>
-                <p style={{ margin: '0 0 5px 0', color: '#374151', fontSize: '0.95rem' }}>
-                  <strong>{employee.lastAction === 'ClockIn' ? 'Clocked in' : 'Returned to work'}</strong> at {employee.lastActionTime}
-                </p>
-                <p style={{ margin: 0, color: '#059669', fontWeight: '600', fontSize: '1rem' }}>
-                  ⏱️ Duration: {calculateDuration(employee.lastActionTime)}
-                </p>
-              </div>
+            {/* Status Badge */}
+            <div style={{
+              position: 'absolute',
+              top: '16px',
+              right: '16px',
+              background: 'linear-gradient(135deg, #10b981, #059669)',
+              color: 'white',
+              padding: '6px 12px',
+              borderRadius: '20px',
+              fontSize: '12px',
+              fontWeight: '700',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              boxShadow: '0 2px 8px rgba(16, 185, 129, 0.3)'
+            }}>
+              <span style={{ 
+                width: '8px', 
+                height: '8px', 
+                borderRadius: '50%', 
+                background: 'white',
+                animation: 'pulse 2s ease-in-out infinite'
+              }}></span>
+              WORKING
+            </div>
 
-              <div style={{ flex: '2', minWidth: '300px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                <input
-                  type="text"
-                  placeholder="Optional note (e.g., 'Sent home early', 'Forgot to clock out')..."
-                  value={notes[employee.pin] || ''}
-                  onChange={(e) => handleNoteChange(employee.pin, e.target.value)}
-                  style={{
-                    width: '100%',
-                    padding: '10px',
-                    border: '2px solid #e5e7eb',
-                    borderRadius: '8px',
-                    fontSize: '14px'
-                  }}
-                  maxLength={200}
-                />
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <span style={{ fontSize: '12px', color: '#6b7280' }}>
-                    {notes[employee.pin]?.length || 0}/200 characters
-                  </span>
-                  <button
-                    onClick={() => handleClockOut(employee)}
-                    style={{
-                      background: 'linear-gradient(135deg, #ef4444, #dc2626)',
-                      color: 'white',
-                      padding: '10px 24px',
-                      border: 'none',
-                      borderRadius: '8px',
-                      cursor: 'pointer',
-                      fontSize: '14px',
-                      fontWeight: '600',
-                      boxShadow: '0 4px 12px rgba(239, 68, 68, 0.3)',
-                      transition: 'all 0.3s ease'
-                    }}
-                    onMouseOver={(e) => {
-                      e.currentTarget.style.background = 'linear-gradient(135deg, #dc2626, #b91c1c)';
-                      e.currentTarget.style.transform = 'translateY(-2px)';
-                    }}
-                    onMouseOut={(e) => {
-                      e.currentTarget.style.background = 'linear-gradient(135deg, #ef4444, #dc2626)';
-                      e.currentTarget.style.transform = 'translateY(0)';
-                    }}
-                  >
-                    🔴 Clock Out
-                  </button>
+            {/* Employee Info */}
+            <div style={{ marginBottom: '16px', paddingRight: '100px' }}>
+              <h3 style={{ 
+                margin: '0 0 8px 0', 
+                color: '#1e3a8a', 
+                fontSize: '1.3rem',
+                fontWeight: '700'
+              }}>
+                {employee.name}
+              </h3>
+              <p style={{ 
+                margin: 0, 
+                color: '#6b7280', 
+                fontSize: '0.9rem',
+                fontWeight: '600'
+              }}>
+                PIN: {employee.pin}
+              </p>
+            </div>
+
+            {/* Time Info */}
+            <div style={{ 
+              background: 'white',
+              borderRadius: '12px',
+              padding: '16px',
+              marginBottom: '16px',
+              border: '1px solid #e5e7eb'
+            }}>
+              <div style={{ 
+                display: 'flex', 
+                justifyContent: 'space-between',
+                marginBottom: '12px'
+              }}>
+                <div>
+                  <div style={{ fontSize: '11px', color: '#6b7280', fontWeight: '600', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                    {employee.lastAction === 'ClockIn' ? 'Clocked In' : 'Last Action'}
+                  </div>
+                  <div style={{ fontSize: '14px', fontWeight: '700', color: '#374151' }}>
+                    {new Date(employee.lastActionTime).toLocaleTimeString('en-US', { 
+                      hour: 'numeric', 
+                      minute: '2-digit',
+                      hour12: true 
+                    })}
+                  </div>
+                </div>
+                <div style={{ textAlign: 'right' }}>
+                  <div style={{ fontSize: '11px', color: '#6b7280', fontWeight: '600', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                    Duration
+                  </div>
+                  <div style={{ fontSize: '14px', fontWeight: '700', color: '#059669' }}>
+                    ⏱️ {calculateDuration(employee.lastActionTime)}
+                  </div>
                 </div>
               </div>
             </div>
+
+            {/* Note Input */}
+            <textarea
+              placeholder="Optional note (e.g., 'Sent home early', 'Forgot to clock out')..."
+              value={notes[employee.pin] || ''}
+              onChange={(e) => handleNoteChange(employee.pin, e.target.value)}
+              style={{
+                width: '100%',
+                padding: '12px',
+                border: '2px solid #e5e7eb',
+                borderRadius: '10px',
+                fontSize: '14px',
+                fontFamily: 'inherit',
+                resize: 'none',
+                minHeight: '80px',
+                marginBottom: '12px',
+                transition: 'all 0.2s ease'
+              }}
+              maxLength={200}
+              onFocus={(e) => e.target.style.borderColor = '#3b82f6'}
+              onBlur={(e) => e.target.style.borderColor = '#e5e7eb'}
+            />
+            
+            <div style={{ 
+              fontSize: '12px', 
+              color: '#9ca3af',
+              marginBottom: '12px',
+              textAlign: 'right'
+            }}>
+              {notes[employee.pin]?.length || 0}/200
+            </div>
+
+            {/* Clock Out Button */}
+            <button
+              onClick={() => handleClockOut(employee)}
+              disabled={loading[employee.pin]}
+              style={{
+                width: '100%',
+                background: loading[employee.pin] 
+                  ? '#9ca3af' 
+                  : 'linear-gradient(135deg, #ef4444, #dc2626)',
+                color: 'white',
+                padding: '14px',
+                border: 'none',
+                borderRadius: '10px',
+                cursor: loading[employee.pin] ? 'not-allowed' : 'pointer',
+                fontSize: '15px',
+                fontWeight: '700',
+                boxShadow: loading[employee.pin] ? 'none' : '0 4px 12px rgba(239, 68, 68, 0.3)',
+                transition: 'all 0.3s ease',
+                opacity: loading[employee.pin] ? 0.6 : 1
+              }}
+              onMouseOver={(e) => {
+                if (!loading[employee.pin]) {
+                  e.currentTarget.style.background = 'linear-gradient(135deg, #dc2626, #b91c1c)';
+                  e.currentTarget.style.transform = 'translateY(-2px)';
+                }
+              }}
+              onMouseOut={(e) => {
+                if (!loading[employee.pin]) {
+                  e.currentTarget.style.background = 'linear-gradient(135deg, #ef4444, #dc2626)';
+                  e.currentTarget.style.transform = 'translateY(0)';
+                }
+              }}
+            >
+              {loading[employee.pin] ? '⏳ Clocking Out...' : '🔴 Clock Out Now'}
+            </button>
           </div>
         ))}
       </div>
 
+      {/* Info Box */}
       <div style={{ 
-        marginTop: '20px', 
-        padding: '15px', 
+        marginTop: '24px', 
+        padding: '20px', 
         background: '#eff6ff', 
-        borderRadius: '8px',
-        border: '1px solid #bfdbfe'
+        borderRadius: '12px',
+        border: '2px solid #bfdbfe'
       }}>
-        <p style={{ margin: 0, color: '#1e40af', fontSize: '14px' }}>
-          💡 <strong>Tip:</strong> Notes are optional but recommended for record-keeping. Auto-refreshes every 30 seconds.
+        <p style={{ margin: 0, color: '#1e40af', fontSize: '14px', lineHeight: '1.6' }}>
+          <strong>💡 Tip:</strong> Notes are optional but recommended for record-keeping. This view auto-refreshes every 30 seconds.
         </p>
       </div>
+
+      <style>{`
+        @keyframes pulse {
+          0%, 100% { opacity: 1; }
+          50% { opacity: 0.5; }
+        }
+      `}</style>
     </div>
   );
 };
