@@ -312,6 +312,117 @@ const App: React.FC = () => {
       .catch((error) => console.error('Error refreshing records:', error));
   };
 
+  // Get smart buttons based on current employee status
+  const getSmartButtons = () => {
+    const currentStatus = employeeStatus[pin];
+
+    // Not clocked in - show only Clock In
+    if (!currentStatus || currentStatus === 'clockOut') {
+      return (
+        <>
+          <button 
+            onClick={() => handleActionClick('clockIn')}
+            style={{ 
+              gridColumn: 'span 3',
+              fontSize: '24px',
+              padding: '32px'
+            }}
+          >
+            ⚡ Clock In
+          </button>
+        </>
+      );
+    }
+
+    // On a specific break/activity - show only the corresponding "End" button
+    if (currentStatus === 'startBreak') {
+      return (
+        <button 
+          onClick={() => handleActionClick('endBreak')}
+          style={{ 
+            gridColumn: 'span 3',
+            fontSize: '24px',
+            padding: '32px'
+          }}
+        >
+          ✅ End Break
+        </button>
+      );
+    }
+
+    if (currentStatus === 'startRestroom') {
+      return (
+        <button 
+          onClick={() => handleActionClick('endRestroom')}
+          style={{ 
+            gridColumn: 'span 3',
+            fontSize: '24px',
+            padding: '32px'
+          }}
+        >
+          ✅ End Restroom
+        </button>
+      );
+    }
+
+    if (currentStatus === 'startLunch') {
+      return (
+        <button 
+          onClick={() => handleActionClick('endLunch')}
+          style={{ 
+            gridColumn: 'span 3',
+            fontSize: '24px',
+            padding: '32px'
+          }}
+        >
+          ✅ End Lunch
+        </button>
+      );
+    }
+
+    if (currentStatus === 'startItIssue') {
+      return (
+        <button 
+          onClick={() => handleActionClick('endItIssue')}
+          style={{ 
+            gridColumn: 'span 3',
+            fontSize: '24px',
+            padding: '32px'
+          }}
+        >
+          ✅ End IT Issue
+        </button>
+      );
+    }
+
+    if (currentStatus === 'startMeeting') {
+      return (
+        <button 
+          onClick={() => handleActionClick('endMeeting')}
+          style={{ 
+            gridColumn: 'span 3',
+            fontSize: '24px',
+            padding: '32px'
+          }}
+        >
+          ✅ End Meeting
+        </button>
+      );
+    }
+
+    // Clocked in - show all available options
+    return (
+      <>
+        <button onClick={() => handleActionClick('clockOut')}>🔴 Clock Out</button>
+        <button onClick={() => handleActionClick('startBreak')}>☕ Start Break</button>
+        <button onClick={() => handleActionClick('startLunch')}>🍔 Start Lunch</button>
+        <button onClick={() => handleActionClick('startRestroom')}>🚻 Restroom</button>
+        <button onClick={() => handleActionClick('startItIssue')}>💻 IT Issue</button>
+        <button onClick={() => handleActionClick('startMeeting')}>📊 Meeting</button>
+      </>
+    );
+  };
+
   return (
     <div className="time-clock-container" ref={timeClockContainerRef} onKeyDown={handleKeyDown} tabIndex={0}>
       <Login showLogin={showLogin} onLoginSuccess={onLoginSuccess} onCloseOverlay={onCloseOverlay} />
@@ -331,22 +442,32 @@ const App: React.FC = () => {
         <div id="currentPin">Enter PIN: {pin || '____'}</div>
         <button className="clear-button" onClick={handleClear}>Clear PIN</button>
       </div>
+
+      {/* Show current status if PIN is entered and employee has a status */}
+      {pin.length === 4 && employeeStatus[pin] && (
+        <div style={{
+          textAlign: 'center',
+          margin: '16px auto',
+          padding: '12px 24px',
+          background: 'rgba(255, 255, 255, 0.15)',
+          borderRadius: '12px',
+          color: 'white',
+          fontSize: '16px',
+          fontWeight: '600',
+          maxWidth: '600px',
+          backdropFilter: 'blur(10px)'
+        }}>
+          📊 Current Status: <span style={{ textTransform: 'capitalize' }}>
+            {employeeStatus[pin].replace(/([A-Z])/g, ' $1').trim()}
+          </span>
+        </div>
+      )}
+
       <div id="message-container"></div>
       <div className="main-container">
         <Keypad onKeyPress={handleKeyPress} />
         <div className="action-buttons">
-          <button onClick={() => handleActionClick('clockIn')}>⚡ Clock In</button>
-          <button onClick={() => handleActionClick('clockOut')}>🔴 Clock Out</button>
-          <button onClick={() => handleActionClick('startBreak')}>☕ Start Break</button>
-          <button onClick={() => handleActionClick('endBreak')}>✅ End Break</button>
-          <button onClick={() => handleActionClick('startRestroom')}>🚻 Start Restroom</button>
-          <button onClick={() => handleActionClick('endRestroom')}>✅ End Restroom</button>
-          <button onClick={() => handleActionClick('startLunch')}>🍔 Start Lunch</button>
-          <button onClick={() => handleActionClick('endLunch')}>✅ End Lunch</button>
-          <button onClick={() => handleActionClick('startItIssue')}>💻 IT Issue</button>
-          <button onClick={() => handleActionClick('endItIssue')}>✅ End IT Issue</button>
-          <button onClick={() => handleActionClick('startMeeting')}>📊 Meeting</button>
-          <button onClick={() => handleActionClick('endMeeting')}>✅ End Meeting</button>
+          {getSmartButtons()}
         </div>
       </div>
       
