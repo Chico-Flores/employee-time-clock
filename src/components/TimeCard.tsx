@@ -19,6 +19,21 @@ const TimeCard: React.FC<TimeCardProps> = ({ records }) => {
   const [filter, setFilter] = useState<'today' | 'week' | 'month' | 'all'>('today');
   const [filteredRecords, setFilteredRecords] = useState<Record[]>([]);
 
+  // Helper function to check if clock-in is late (after 7:10 AM PST)
+  const isLateClockIn = (timeStr: string): boolean => {
+    try {
+      const recordTime = new Date(timeStr);
+      const hours = recordTime.getHours();
+      const minutes = recordTime.getMinutes();
+      const totalMinutes = hours * 60 + minutes;
+      const lateThreshold = 7 * 60 + 10; // 7:10 AM in minutes (430)
+      
+      return totalMinutes > lateThreshold;
+    } catch {
+      return false;
+    }
+  };
+
   useEffect(() => {
     filterRecords();
   }, [records, filter]);
@@ -318,8 +333,23 @@ const TimeCard: React.FC<TimeCardProps> = ({ records }) => {
                           }}>
                             {record.action === 'Absent' && '❌ '}
                             {record.admin_action && record.action !== 'Absent' && '🔧 '}
+                            {record.action === 'ClockIn' && isLateClockIn(record.time) && '⏰ '}
                             {record.action}
                             {record.admin_action && <span style={{ color: '#92400e', fontSize: '0.85em', fontStyle: 'italic', marginLeft: '6px' }}>(Admin)</span>}
+                            {record.action === 'ClockIn' && isLateClockIn(record.time) && (
+                              <span style={{ 
+                                color: '#dc2626', 
+                                fontSize: '0.85em', 
+                                fontWeight: '700',
+                                marginLeft: '6px',
+                                background: '#fee2e2',
+                                padding: '3px 8px',
+                                borderRadius: '6px',
+                                border: '1px solid #fecaca'
+                              }}>
+                                LATE
+                              </span>
+                            )}
                             {record.note && (
                               <div style={{ 
                                 fontSize: '0.85em', 
