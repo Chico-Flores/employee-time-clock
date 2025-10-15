@@ -6,6 +6,7 @@ import HoursCalculator from './HoursCalculator';
 import DownloadRecords from './DownloadRecords';
 import AddEmployee from './AddEmployee';
 import ManageEmployees from './ManageEmployees';
+import EmployeeTags from './EmployeeTags'; // Already imported, just need to use it
 
 interface AdminTabsProps {
   records: { id: number; name: string; pin: string; action: string; time: string; ip: string; admin_action?: boolean; note?: string }[];
@@ -95,6 +96,11 @@ const AdminTabs: React.FC<AdminTabsProps> = ({
             <ManageEmployees 
               showMessageToUser={showMessageToUser}
               onEmployeeDeleted={onRecordsUpdate}
+            />
+            {/* ADD EMPLOYEE TAGS HERE */}
+            <EmployeeTags 
+              showMessageToUser={showMessageToUser}
+              onTagsUpdated={onRecordsUpdate}
             />
           </div>
         )}
