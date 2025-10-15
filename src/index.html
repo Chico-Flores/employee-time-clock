@@ -3,12 +3,44 @@
 
 <head>
   <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="PowerHouze Group Employee Time Clock - Clock in, out, and track your time">
+  <meta name="theme-color" content="#2563eb">
+  
+  <!-- Apple Touch Icon -->
+  <link rel="apple-touch-icon" href="/icon-192.png">
+  
+  <!-- Favicon -->
   <link rel="icon" href="favicon.png" type="image/x-icon" />
+  
+  <!-- PWA Manifest -->
+  <link rel="manifest" href="/manifest.json">
+  
   <title>Employee Time Clock</title>
 </head>
 
 <body>
   <div id="root"></div>
+  
+  <!-- Register Service Worker -->
+  <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('/service-worker.js')
+          .then((registration) => {
+            console.log('Service Worker registered successfully:', registration.scope);
+            
+            // Check for updates periodically
+            setInterval(() => {
+              registration.update();
+            }, 60000); // Check every minute
+          })
+          .catch((error) => {
+            console.log('Service Worker registration failed:', error);
+          });
+      });
+    }
+  </script>
 </body>
 
 </html>
