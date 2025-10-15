@@ -290,12 +290,13 @@ const App: React.FC = () => {
         });
         setTimeCardRecords([...timeCardRecords, { id: data.id, name: data.name, pin, action: record.action, time: record.time, ip: ip }]);
         
-        // Save PIN if remember is checked, otherwise clear it
+        // Save PIN if remember is checked
         if (rememberPin) {
           localStorage.setItem('rememberedPin', pin);
         }
         
-        setPin(''); // Always clear PIN after action for privacy
+        // Keep PIN in place so employee can continue taking actions
+        // They can manually clear it when done using the "Clear PIN" button
         showMessageToUser('Time recorded successfully', 'success');
       })
       .catch((error) => {
