@@ -236,6 +236,28 @@ const App: React.FC = () => {
       return;
     }
 
+    // Clock-in time restrictions (6:50 AM - 4:00 PM PST)
+    if (selectedAction === 'clockIn') {
+      const now = new Date();
+      const pstTime = new Date(now.toLocaleString('en-US', { timeZone: 'America/Los_Angeles' }));
+      const hours = pstTime.getHours();
+      const minutes = pstTime.getMinutes();
+      const currentMinutes = hours * 60 + minutes; // Convert to total minutes since midnight
+      
+      const earliestClockIn = 6 * 60 + 50; // 6:50 AM in minutes (410)
+      const latestClockIn = 16 * 60; // 4:00 PM in minutes (960)
+      
+      if (currentMinutes < earliestClockIn) {
+        showMessageToUser('❌ Clock-in not allowed before 6:50 AM PST', 'error');
+        return;
+      }
+      
+      if (currentMinutes >= latestClockIn) {
+        showMessageToUser('❌ Clock-in not allowed after 4:00 PM PST', 'error');
+        return;
+      }
+    }
+
     const lastAction = employeeStatus[pin];
 
     const validTransitions: { [key: string]: string[] } = {
