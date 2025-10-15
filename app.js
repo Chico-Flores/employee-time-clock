@@ -512,6 +512,46 @@ app.post('/add-employee', async (req, res) => {
     }
 });
 
+// NEW ROUTE: Delete employee - ADMIN ONLY
+app.post('/delete-employee', requireAdmin, async (req, res) => {
+    const { pin } = req.body;
+    
+    console.log('Delete employee attempt - Session:', req.session);
+    
+    try {
+        const db = getDB();
+        
+        // Check if employee exists
+        const employee = await db.collection('users').findOne({ pin });
+        
+        if (!employee) {
+            return res.status(404).json({ error: 'Employee not found' });
+        }
+        
+        // Don't allow deleting admin accounts
+        if (employee.username) {
+            return res.status(403).json({ error: 'Cannot delete admin accounts' });
+        }
+        
+        // Delete the employee
+        const result = await db.collection('users').deleteOne({ pin });
+        
+        if (result.deletedCount === 0) {
+            return res.status(500).json({ error: 'Failed to delete employee' });
+        }
+        
+        console.log(`Employee deleted: ${employee.name} (PIN: ${pin})`);
+        res.status(200).json({ 
+            success: true, 
+            message: `Employee ${employee.name} deleted successfully`,
+            name: employee.name 
+        });
+    } catch (error) {
+        console.error('Delete employee error:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
 // Start server after DB connection
 connectDB().then(() => {
     app.listen(PORT, '0.0.0.0', () => {
