@@ -7,7 +7,6 @@ interface DownloadRecordsProps {
 const DownloadRecords: React.FC<DownloadRecordsProps> = ({ showMessageToUser }) => {
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
-  const [showFilters, setShowFilters] = useState(false);
 
   const getDateRange = (period: string): { start: string; end: string } => {
     const now = new Date();
@@ -123,166 +122,229 @@ const DownloadRecords: React.FC<DownloadRecordsProps> = ({ showMessageToUser }) 
   };
 
   return (
-    <div style={{ marginTop: '20px', marginBottom: '20px' }}>
-      <button 
-        onClick={() => setShowFilters(!showFilters)}
-        style={{
-          background: '#2563eb',
-          color: 'white',
-          padding: '12px 24px',
-          border: 'none',
-          borderRadius: '8px',
-          cursor: 'pointer',
-          fontSize: '16px',
-          fontWeight: '600',
-          marginBottom: showFilters ? '15px' : '0'
-        }}
-      >
-        📥 Download Records {showFilters ? '▼' : '▶'}
-      </button>
-
-      {showFilters && (
-        <div style={{
-          background: 'white',
-          border: '2px solid #e5e7eb',
-          borderRadius: '12px',
-          padding: '20px',
-          marginTop: '10px'
+    <div style={{ 
+      background: 'white', 
+      borderRadius: '20px', 
+      padding: '2rem', 
+      margin: '2rem auto', 
+      maxWidth: '1400px',
+      width: '95%',
+      boxShadow: '0 20px 60px rgba(0, 0, 0, 0.3)' 
+    }}>
+      <h2 style={{ color: '#1e3a8a', marginBottom: '10px', fontSize: '1.8rem' }}>📥 Download Records</h2>
+      <p style={{ color: '#666', marginBottom: '30px' }}>Export time card records as CSV with flexible date filtering</p>
+      
+      {/* Quick Filter Buttons */}
+      <div style={{ marginBottom: '25px' }}>
+        <h3 style={{ 
+          fontSize: '15px', 
+          color: '#374151', 
+          fontWeight: '700', 
+          marginBottom: '12px',
+          textTransform: 'uppercase',
+          letterSpacing: '0.5px'
         }}>
-          <h3 style={{ margin: '0 0 15px 0', color: '#1e3a8a' }}>Filter by Date Range</h3>
-          
-          {/* Quick Filter Buttons */}
-          <div style={{ 
-            display: 'flex', 
-            flexWrap: 'wrap', 
-            gap: '8px', 
-            marginBottom: '20px' 
-          }}>
-            <button onClick={() => handleQuickFilter('today')} className="quick-filter-btn">
-              Today
-            </button>
-            <button onClick={() => handleQuickFilter('yesterday')} className="quick-filter-btn">
-              Yesterday
-            </button>
-            <button onClick={() => handleQuickFilter('thisWeek')} className="quick-filter-btn">
-              This Week
-            </button>
-            <button onClick={() => handleQuickFilter('lastWeek')} className="quick-filter-btn">
-              Last Week
-            </button>
-            <button onClick={() => handleQuickFilter('last7Days')} className="quick-filter-btn">
-              Last 7 Days
-            </button>
-            <button onClick={() => handleQuickFilter('thisMonth')} className="quick-filter-btn">
-              This Month
-            </button>
-            <button onClick={() => handleQuickFilter('lastMonth')} className="quick-filter-btn">
-              Last Month
-            </button>
-          </div>
+          Quick Filters
+        </h3>
+        <div style={{ 
+          display: 'flex', 
+          flexWrap: 'wrap', 
+          gap: '8px'
+        }}>
+          <button onClick={() => handleQuickFilter('today')} className="quick-filter-btn">
+            Today
+          </button>
+          <button onClick={() => handleQuickFilter('yesterday')} className="quick-filter-btn">
+            Yesterday
+          </button>
+          <button onClick={() => handleQuickFilter('thisWeek')} className="quick-filter-btn">
+            This Week
+          </button>
+          <button onClick={() => handleQuickFilter('lastWeek')} className="quick-filter-btn">
+            Last Week
+          </button>
+          <button onClick={() => handleQuickFilter('last7Days')} className="quick-filter-btn">
+            Last 7 Days
+          </button>
+          <button onClick={() => handleQuickFilter('thisMonth')} className="quick-filter-btn">
+            This Month
+          </button>
+          <button onClick={() => handleQuickFilter('lastMonth')} className="quick-filter-btn">
+            Last Month
+          </button>
+        </div>
+      </div>
 
-          {/* Custom Date Range */}
-          <div style={{ 
-            display: 'grid', 
-            gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', 
-            gap: '15px',
-            marginBottom: '20px'
-          }}>
-            <div>
-              <label style={{ display: 'block', marginBottom: '5px', fontWeight: '600', color: '#374151' }}>
-                Start Date:
-              </label>
-              <input
-                type="date"
-                value={startDate}
-                onChange={(e) => setStartDate(e.target.value)}
-                style={{
-                  width: '100%',
-                  padding: '10px',
-                  border: '2px solid #e5e7eb',
-                  borderRadius: '8px',
-                  fontSize: '16px'
-                }}
-              />
-            </div>
-            <div>
-              <label style={{ display: 'block', marginBottom: '5px', fontWeight: '600', color: '#374151' }}>
-                End Date:
-              </label>
-              <input
-                type="date"
-                value={endDate}
-                onChange={(e) => setEndDate(e.target.value)}
-                style={{
-                  width: '100%',
-                  padding: '10px',
-                  border: '2px solid #e5e7eb',
-                  borderRadius: '8px',
-                  fontSize: '16px'
-                }}
-              />
-            </div>
-          </div>
-
-          {/* Action Buttons */}
-          <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
-            <button
-              onClick={downloadRecords}
-              style={{
-                background: 'linear-gradient(135deg, #10b981, #059669)',
-                color: 'white',
-                padding: '12px 32px',
-                border: 'none',
-                borderRadius: '8px',
-                cursor: 'pointer',
-                fontSize: '16px',
-                fontWeight: '600',
-                boxShadow: '0 4px 12px rgba(16, 185, 129, 0.3)'
-              }}
-            >
-              📥 Download
-            </button>
-            <button
-              onClick={() => {
-                setStartDate('');
-                setEndDate('');
-              }}
-              style={{
-                background: '#6b7280',
-                color: 'white',
-                padding: '12px 24px',
-                border: 'none',
-                borderRadius: '8px',
-                cursor: 'pointer',
-                fontSize: '16px',
-                fontWeight: '600'
-              }}
-            >
-              Clear Filters
-            </button>
-          </div>
-
-          {(startDate || endDate) && (
-            <div style={{
-              marginTop: '15px',
-              padding: '12px',
-              background: '#eff6ff',
-              border: '1px solid #bfdbfe',
-              borderRadius: '8px',
-              color: '#1e40af'
+      {/* Custom Date Range */}
+      <div style={{ marginBottom: '25px' }}>
+        <h3 style={{ 
+          fontSize: '15px', 
+          color: '#374151', 
+          fontWeight: '700', 
+          marginBottom: '12px',
+          textTransform: 'uppercase',
+          letterSpacing: '0.5px'
+        }}>
+          Custom Date Range
+        </h3>
+        <div style={{ 
+          display: 'grid', 
+          gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', 
+          gap: '15px'
+        }}>
+          <div>
+            <label style={{ 
+              display: 'block', 
+              marginBottom: '8px', 
+              fontWeight: '600', 
+              color: '#374151',
+              fontSize: '14px'
             }}>
-              <strong>Selected Range:</strong> {startDate || 'Beginning'} to {endDate || 'Today'}
-            </div>
-          )}
+              Start Date:
+            </label>
+            <input
+              type="date"
+              value={startDate}
+              onChange={(e) => setStartDate(e.target.value)}
+              style={{
+                width: '100%',
+                padding: '14px',
+                border: '2px solid #e5e7eb',
+                borderRadius: '12px',
+                fontSize: '16px',
+                transition: 'all 0.3s ease'
+              }}
+              onFocus={(e) => e.target.style.borderColor = '#2563eb'}
+              onBlur={(e) => e.target.style.borderColor = '#e5e7eb'}
+            />
+          </div>
+          <div>
+            <label style={{ 
+              display: 'block', 
+              marginBottom: '8px', 
+              fontWeight: '600', 
+              color: '#374151',
+              fontSize: '14px'
+            }}>
+              End Date:
+            </label>
+            <input
+              type="date"
+              value={endDate}
+              onChange={(e) => setEndDate(e.target.value)}
+              style={{
+                width: '100%',
+                padding: '14px',
+                border: '2px solid #e5e7eb',
+                borderRadius: '12px',
+                fontSize: '16px',
+                transition: 'all 0.3s ease'
+              }}
+              onFocus={(e) => e.target.style.borderColor = '#2563eb'}
+              onBlur={(e) => e.target.style.borderColor = '#e5e7eb'}
+            />
+          </div>
+        </div>
+      </div>
+
+      {/* Selected Range Display */}
+      {(startDate || endDate) && (
+        <div style={{
+          marginBottom: '20px',
+          padding: '14px 18px',
+          background: '#eff6ff',
+          border: '2px solid #bfdbfe',
+          borderRadius: '12px',
+          color: '#1e40af',
+          fontSize: '14px',
+          fontWeight: '600'
+        }}>
+          📅 Selected Range: <strong>{startDate || 'Beginning'}</strong> to <strong>{endDate || 'Today'}</strong>
         </div>
       )}
+
+      {/* Action Buttons */}
+      <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+        <button
+          onClick={downloadRecords}
+          style={{
+            background: 'linear-gradient(135deg, #10b981, #059669)',
+            color: 'white',
+            padding: '14px 32px',
+            border: 'none',
+            borderRadius: '12px',
+            cursor: 'pointer',
+            fontSize: '16px',
+            fontWeight: '600',
+            boxShadow: '0 4px 12px rgba(16, 185, 129, 0.3)',
+            transition: 'all 0.3s ease'
+          }}
+          onMouseOver={(e) => {
+            e.currentTarget.style.background = 'linear-gradient(135deg, #059669, #047857)';
+            e.currentTarget.style.transform = 'translateY(-2px)';
+            e.currentTarget.style.boxShadow = '0 6px 16px rgba(16, 185, 129, 0.4)';
+          }}
+          onMouseOut={(e) => {
+            e.currentTarget.style.background = 'linear-gradient(135deg, #10b981, #059669)';
+            e.currentTarget.style.transform = 'translateY(0)';
+            e.currentTarget.style.boxShadow = '0 4px 12px rgba(16, 185, 129, 0.3)';
+          }}
+        >
+          📥 Download CSV
+        </button>
+        <button
+          onClick={() => {
+            setStartDate('');
+            setEndDate('');
+          }}
+          style={{
+            background: '#f3f4f6',
+            color: '#374151',
+            padding: '14px 24px',
+            border: '2px solid #e5e7eb',
+            borderRadius: '12px',
+            cursor: 'pointer',
+            fontSize: '16px',
+            fontWeight: '600',
+            transition: 'all 0.3s ease'
+          }}
+          onMouseOver={(e) => {
+            e.currentTarget.style.background = '#e5e7eb';
+            e.currentTarget.style.borderColor = '#d1d5db';
+          }}
+          onMouseOut={(e) => {
+            e.currentTarget.style.background = '#f3f4f6';
+            e.currentTarget.style.borderColor = '#e5e7eb';
+          }}
+        >
+          Clear Filters
+        </button>
+      </div>
+
+      {/* Info Box */}
+      <div style={{ 
+        marginTop: '30px', 
+        padding: '20px', 
+        background: 'linear-gradient(135deg, #fef3c7, #fde68a)', 
+        borderRadius: '12px',
+        border: '2px solid #fbbf24'
+      }}>
+        <h4 style={{ margin: '0 0 10px 0', color: '#92400e' }}>💡 Export Tips</h4>
+        <ul style={{ margin: 0, paddingLeft: '20px', color: '#92400e', lineHeight: '1.8' }}>
+          <li>Use Quick Filters for common date ranges</li>
+          <li>Custom dates allow precise range selection</li>
+          <li>Leave dates blank to download all records</li>
+          <li>CSV files open in Excel, Google Sheets, and most spreadsheet apps</li>
+          <li>Records include: Name, PIN, Action, Time, IP Address, Admin Notes</li>
+        </ul>
+      </div>
 
       <style>{`
         .quick-filter-btn {
           background: #f3f4f6;
           border: 2px solid #e5e7eb;
-          padding: 8px 16px;
-          border-radius: 6px;
+          padding: 10px 18px;
+          border-radius: 10px;
           cursor: pointer;
           font-size: 14px;
           font-weight: 600;
@@ -293,6 +355,8 @@ const DownloadRecords: React.FC<DownloadRecordsProps> = ({ showMessageToUser }) 
           background: #e5e7eb;
           border-color: #2563eb;
           color: #2563eb;
+          transform: translateY(-2px);
+          box-shadow: 0 2px 8px rgba(37, 99, 235, 0.2);
         }
       `}</style>
     </div>
