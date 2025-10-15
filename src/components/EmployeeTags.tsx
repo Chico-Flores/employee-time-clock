@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { EMPLOYEE_TAG_OPTIONS } from '../config/employeeTags'; // Import from config
 
 interface Employee {
   name: string;
@@ -12,16 +13,8 @@ interface EmployeeTagsProps {
   onTagsUpdated: () => void;
 }
 
-// Predefined tag options with colors
-const TAG_OPTIONS = [
-  { label: 'Full-time', color: '#10b981', bgColor: '#d1fae5' },
-  { label: 'Part-time', color: '#3b82f6', bgColor: '#dbeafe' },
-  { label: 'Remote', color: '#8b5cf6', bgColor: '#ede9fe' },
-  { label: 'Manager', color: '#f59e0b', bgColor: '#fef3c7' },
-  { label: 'Supervisor', color: '#ef4444', bgColor: '#fee2e2' },
-  { label: 'Trainee', color: '#06b6d4', bgColor: '#cffafe' },
-  { label: 'Seasonal', color: '#ec4899', bgColor: '#fce7f3' }
-];
+// Use the imported TAG_OPTIONS instead of hardcoded
+const TAG_OPTIONS = EMPLOYEE_TAG_OPTIONS;
 
 const EmployeeTags: React.FC<EmployeeTagsProps> = ({ showMessageToUser, onTagsUpdated }) => {
   const [employees, setEmployees] = useState<Employee[]>([]);
@@ -465,6 +458,7 @@ const EmployeeTags: React.FC<EmployeeTagsProps> = ({ showMessageToUser, onTagsUp
           <li>Employees can have multiple tags assigned</li>
           <li>Use filters above to view employees by specific tags</li>
           <li>Tags are visible in reports and time card views</li>
+          <li>To add new tags, edit the <code>src/config/employeeTags.ts</code> file</li>
         </ul>
       </div>
     </div>
