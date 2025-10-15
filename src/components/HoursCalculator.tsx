@@ -16,162 +16,209 @@ interface EmployeeSummary {
 const HoursCalculator: React.FC = () => {
   const [summary, setSummary] = useState<EmployeeSummary[]>([]);
   const [fileName, setFileName] = useState('');
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
     
     setFileName(file.name);
+    setError('');
+    setLoading(true);
     
     const reader = new FileReader();
     reader.onload = (event) => {
-      const text = event.target?.result as string;
-      parseCSV(text);
+      try {
+        const text = event.target?.result as string;
+        parseCSV(text);
+      } catch (err: any) {
+        console.error('File read error:', err);
+        setError('Error reading file: ' + err.message);
+        setLoading(false);
+      }
+    };
+    reader.onerror = () => {
+      setError('Failed to read file');
+      setLoading(false);
     };
     reader.readAsText(file);
   };
 
   const parseCSV = (text: string) => {
-    const lines = text.trim().split('\n');
-    if (lines.length === 0) return;
-    
-    // Function to parse CSV line respecting quoted fields
-    const parseCsvLine = (line: string): string[] => {
-      const result: string[] = [];
-      let current = '';
-      let inQuotes = false;
-      
-      for (let i = 0; i < line.length; i++) {
-        const char = line[i];
-        
-        if (char === '"') {
-          inQuotes = !inQuotes;
-        } else if (char === ',' && !inQuotes) {
-          result.push(current.trim());
-          current = '';
-        } else {
-          current += char;
-        }
-      }
-      result.push(current.trim());
-      return result;
-    };
-    
-    // Parse headers
-    const headers = parseCsvLine(lines[0]);
-    
-    // Parse data rows
-    const data = lines.slice(1)
-      .filter(line => line.trim())
-      .map(line => {
-        const values = parseCsvLine(line);
-        const record: any = {};
-        headers.forEach((header, i) => {
-          record[header] = values[i] || '';
-        });
-        return record;
-      });
-    
-    calculateHours(data);
-  };
-
-  const calculateHours = (data: any[]) => {
-    const employeeData: { [key: string]: any } = {};
-    
-    data.forEach(record => {
-      const name = record.name?.trim();
-      if (!name) return;
-      
-      if (!employeeData[name]) {
-        employeeData[name] = { name, events: [] };
-      }
-      
-      const time = new Date(record.time);
-      const action = record.action;
-      
-      employeeData[name].events.push({ action, time });
-    });
-
-    const summaryData: EmployeeSummary[] = [];
-    
-    for (const name in employeeData) {
-      const emp = employeeData[name];
-      emp.events.sort((a: any, b: any) => a.time.getTime() - b.time.getTime());
-      
-      let totalWorkMinutes = 0;
-      let breakMinutes = 0;
-      let lunchMinutes = 0;
-      let restroomMinutes = 0;
-      let itIssueMinutes = 0;
-      let meetingMinutes = 0;
-      
-      let currentClockIn: Date | null = null;
-      let currentActivity: string | null = null;
-      let activityStart: Date | null = null;
-      
-      let shiftsCompleted = 0;
-      
-      emp.events.forEach((event: any) => {
-        const { action, time } = event;
-        
-        // Skip absent records in calculations
-        if (action === 'Absent') {
-          return;
-        }
-        
-        if (action === 'ClockIn') {
-          currentClockIn = time;
-        } else if (action === 'ClockOut') {
-          if (currentClockIn) {
-            const diff = (time.getTime() - currentClockIn.getTime()) / (1000 * 60);
-            totalWorkMinutes += diff;
-            currentClockIn = null;
-            shiftsCompleted++;
-          }
-        } else if (action.startsWith('Start')) {
-          activityStart = time;
-          currentActivity = action.replace('Start', '');
-        } else if (action.startsWith('End')) {
-          if (activityStart && currentActivity) {
-            const diff = (time.getTime() - activityStart.getTime()) / (1000 * 60);
-            
-            if (currentActivity === 'Break') breakMinutes += diff;
-            else if (currentActivity === 'Lunch') lunchMinutes += diff;
-            else if (currentActivity === 'Restroom') restroomMinutes += diff;
-            else if (currentActivity === 'ItIssue') itIssueMinutes += diff;
-            else if (currentActivity === 'Meeting') meetingMinutes += diff;
-            
-            activityStart = null;
-            currentActivity = null;
-          }
-        }
-      });
-      
-      // Skip employees who haven't clocked out yet
-      if (shiftsCompleted === 0) {
+    try {
+      const lines = text.trim().split('\n');
+      if (lines.length === 0) {
+        setError('CSV file is empty');
+        setLoading(false);
         return;
       }
       
-      const paidMinutes = totalWorkMinutes - breakMinutes - lunchMinutes;
-      const paidHours = Math.floor(paidMinutes / 60);
-      const paidMins = Math.round(paidMinutes % 60);
+      // Function to parse CSV line respecting quoted fields
+      const parseCsvLine = (line: string): string[] => {
+        const result: string[] = [];
+        let current = '';
+        let inQuotes = false;
+        
+        for (let i = 0; i < line.length; i++) {
+          const char = line[i];
+          
+          if (char === '"') {
+            inQuotes = !inQuotes;
+          } else if (char === ',' && !inQuotes) {
+            result.push(current.trim());
+            current = '';
+          } else {
+            current += char;
+          }
+        }
+        result.push(current.trim());
+        return result;
+      };
       
-      summaryData.push({
-        name,
-        totalPaidHours: (paidMinutes / 60).toFixed(2),
-        paidHoursDisplay: `${paidHours}h ${paidMins}m`,
-        totalWorkHours: (totalWorkMinutes / 60).toFixed(2),
-        breakTime: (breakMinutes / 60).toFixed(2),
-        lunchTime: (lunchMinutes / 60).toFixed(2),
-        restroomTime: (restroomMinutes / 60).toFixed(2),
-        itIssueTime: (itIssueMinutes / 60).toFixed(2),
-        meetingTime: (meetingMinutes / 60).toFixed(2),
-        shifts: emp.events.filter((e: any) => e.action === 'ClockIn').length
-      });
+      // Parse headers
+      const headers = parseCsvLine(lines[0]);
+      console.log('CSV Headers:', headers);
+      
+      // Parse data rows
+      const data = lines.slice(1)
+        .filter(line => line.trim())
+        .map(line => {
+          const values = parseCsvLine(line);
+          const record: any = {};
+          headers.forEach((header, i) => {
+            record[header] = values[i] || '';
+          });
+          return record;
+        });
+      
+      console.log('Parsed data rows:', data.length);
+      
+      if (data.length === 0) {
+        setError('No data rows found in CSV');
+        setLoading(false);
+        return;
+      }
+      
+      calculateHours(data);
+    } catch (err: any) {
+      console.error('CSV parsing error:', err);
+      setError('Error parsing CSV: ' + err.message);
+      setLoading(false);
     }
-    
-    summaryData.sort((a, b) => a.name.localeCompare(b.name));
-    setSummary(summaryData);
+  };
+
+  const calculateHours = (data: any[]) => {
+    try {
+      const employeeData: { [key: string]: any } = {};
+      
+      data.forEach(record => {
+        const name = record.name?.trim();
+        if (!name) return;
+        
+        if (!employeeData[name]) {
+          employeeData[name] = { name, events: [] };
+        }
+        
+        const time = new Date(record.time);
+        const action = record.action;
+        
+        employeeData[name].events.push({ action, time });
+      });
+
+      const summaryData: EmployeeSummary[] = [];
+      
+      for (const name in employeeData) {
+        const emp = employeeData[name];
+        emp.events.sort((a: any, b: any) => a.time.getTime() - b.time.getTime());
+        
+        let totalWorkMinutes = 0;
+        let breakMinutes = 0;
+        let lunchMinutes = 0;
+        let restroomMinutes = 0;
+        let itIssueMinutes = 0;
+        let meetingMinutes = 0;
+        
+        let currentClockIn: Date | null = null;
+        let currentActivity: string | null = null;
+        let activityStart: Date | null = null;
+        
+        let shiftsCompleted = 0;
+        
+        emp.events.forEach((event: any) => {
+          const { action, time } = event;
+          
+          // Skip absent records in calculations
+          if (action === 'Absent') {
+            return;
+          }
+          
+          if (action === 'ClockIn') {
+            currentClockIn = time;
+          } else if (action === 'ClockOut') {
+            if (currentClockIn) {
+              const diff = (time.getTime() - currentClockIn.getTime()) / (1000 * 60);
+              totalWorkMinutes += diff;
+              currentClockIn = null;
+              shiftsCompleted++;
+            }
+          } else if (action.startsWith('Start')) {
+            activityStart = time;
+            currentActivity = action.replace('Start', '');
+          } else if (action.startsWith('End')) {
+            if (activityStart && currentActivity) {
+              const diff = (time.getTime() - activityStart.getTime()) / (1000 * 60);
+              
+              if (currentActivity === 'Break') breakMinutes += diff;
+              else if (currentActivity === 'Lunch') lunchMinutes += diff;
+              else if (currentActivity === 'Restroom') restroomMinutes += diff;
+              else if (currentActivity === 'ItIssue') itIssueMinutes += diff;
+              else if (currentActivity === 'Meeting') meetingMinutes += diff;
+              
+              activityStart = null;
+              currentActivity = null;
+            }
+          }
+        });
+        
+        // Skip employees who haven't clocked out yet
+        if (shiftsCompleted === 0) {
+          continue;
+        }
+        
+        const paidMinutes = totalWorkMinutes - breakMinutes - lunchMinutes;
+        const paidHours = Math.floor(paidMinutes / 60);
+        const paidMins = Math.round(paidMinutes % 60);
+        
+        summaryData.push({
+          name,
+          totalPaidHours: (paidMinutes / 60).toFixed(2),
+          paidHoursDisplay: `${paidHours}h ${paidMins}m`,
+          totalWorkHours: (totalWorkMinutes / 60).toFixed(2),
+          breakTime: (breakMinutes / 60).toFixed(2),
+          lunchTime: (lunchMinutes / 60).toFixed(2),
+          restroomTime: (restroomMinutes / 60).toFixed(2),
+          itIssueTime: (itIssueMinutes / 60).toFixed(2),
+          meetingTime: (meetingMinutes / 60).toFixed(2),
+          shifts: emp.events.filter((e: any) => e.action === 'ClockIn').length
+        });
+      }
+      
+      if (summaryData.length === 0) {
+        setError('No complete shifts found. Employees must have at least one ClockIn and ClockOut pair.');
+        setLoading(false);
+        return;
+      }
+      
+      summaryData.sort((a, b) => a.name.localeCompare(b.name));
+      setSummary(summaryData);
+      setError('');
+      setLoading(false);
+    } catch (err: any) {
+      console.error('Calculation error:', err);
+      setError('Error calculating hours: ' + err.message);
+      setLoading(false);
+    }
   };
 
   const downloadSummary = () => {
@@ -234,11 +281,16 @@ const HoursCalculator: React.FC = () => {
             transition: 'all 0.3s ease'
           }}
         >
-          📁 Choose CSV File
+          {loading ? '⏳ Processing...' : '📁 Choose CSV File'}
         </label>
         {fileName && (
           <p style={{ marginTop: '15px', color: '#059669', fontWeight: 'bold', fontSize: '16px' }}>
             ✓ Loaded: {fileName}
+          </p>
+        )}
+        {error && (
+          <p style={{ marginTop: '15px', color: '#dc2626', fontWeight: 'bold', fontSize: '16px' }}>
+            ⚠️ {error}
           </p>
         )}
       </div>
