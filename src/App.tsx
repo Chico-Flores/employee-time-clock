@@ -8,6 +8,26 @@ import AdminTabs from './components/AdminTabs';
 import PWAInstaller from './components/PWAInstaller';
 import './assets/css/styles.css';
 
+// Helper function to format employee status for display
+const formatStatusDisplay = (status: string): { text: string; emoji: string } => {
+  const statusMap: { [key: string]: { text: string; emoji: string } } = {
+    'clockIn': { text: 'Clocked In & Working', emoji: '🟢' },
+    'endBreak': { text: 'Clocked In & Working', emoji: '🟢' },
+    'endRestroom': { text: 'Clocked In & Working', emoji: '🟢' },
+    'endLunch': { text: 'Clocked In & Working', emoji: '🟢' },
+    'endItIssue': { text: 'Clocked In & Working', emoji: '🟢' },
+    'endMeeting': { text: 'Clocked In & Working', emoji: '🟢' },
+    'startBreak': { text: 'On Break', emoji: '☕' },
+    'startLunch': { text: 'On Lunch', emoji: '🍔' },
+    'startRestroom': { text: 'Restroom Break', emoji: '🚻' },
+    'startItIssue': { text: 'Having IT Issues', emoji: '💻' },
+    'startMeeting': { text: 'In a Meeting', emoji: '📊' },
+    'clockOut': { text: 'Clocked Out', emoji: '🔴' }
+  };
+
+  return statusMap[status] || { text: status, emoji: '⚪' };
+};
+
 const App: React.FC = () => {
   const timeClockContainerRef = useRef<HTMLDivElement>(null);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
@@ -603,9 +623,16 @@ const App: React.FC = () => {
           maxWidth: '600px',
           backdropFilter: 'blur(10px)'
         }}>
-          📊 Current Status: <span style={{ textTransform: 'capitalize' }}>
-            {employeeStatus[pin].replace(/([A-Z])/g, ' $1').trim()}
-          </span>
+          {(() => {
+            const display = formatStatusDisplay(employeeStatus[pin]);
+            return (
+              <>
+                {display.emoji} Current Status: <span style={{ fontWeight: '700' }}>
+                  {display.text}
+                </span>
+              </>
+            );
+          })()}
         </div>
       )}
 
