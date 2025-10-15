@@ -35,10 +35,14 @@ module.exports = {
     }),
     new CopyPlugin({
       patterns: [
-        { from: 'public/manifest.json', to: 'manifest.json' },
-        { from: 'public/service-worker.js', to: 'service-worker.js' },
-        { from: 'public/icon-192.png', to: 'icon-192.png' },
-        { from: 'public/icon-512.png', to: 'icon-512.png' },
+        { 
+          from: 'public', 
+          to: '.', 
+          noErrorOnMissing: true,
+          globOptions: {
+            ignore: ['**/.DS_Store']
+          }
+        }
       ],
     }),
   ],
