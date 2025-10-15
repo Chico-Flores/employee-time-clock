@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import BulkClockOut from './BulkClockOut';
 
 interface Employee {
   name: string;
@@ -164,6 +165,13 @@ const ManualClockOut: React.FC<ManualClockOutProps> = ({ records, showMessageToU
           {currentlyWorking.length} {currentlyWorking.length === 1 ? 'employee' : 'employees'} currently working
         </p>
       </div>
+
+      {/* Bulk Clock Out Component */}
+      <BulkClockOut 
+        currentlyWorking={currentlyWorking}
+        showMessageToUser={showMessageToUser}
+        onBulkClockOutSuccess={onClockOutSuccess}
+      />
 
       <div style={{ 
         display: 'grid', 
