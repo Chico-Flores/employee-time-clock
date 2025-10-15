@@ -46,6 +46,15 @@ const App: React.FC = () => {
     return () => clearInterval(timer);
   }, []);
 
+  // Load saved PIN on mount
+  useEffect(() => {
+    const savedPin = localStorage.getItem('rememberedPin');
+    if (savedPin) {
+      setPin(savedPin);
+      setRememberPin(true);
+    }
+  }, []);
+
   useEffect(() => {
     fetch('/is-logged-in')
       .then((response) => response.json())
@@ -190,6 +199,8 @@ const App: React.FC = () => {
 
   const handleClear = () => {
     setPin('');
+    setRememberPin(false);
+    localStorage.removeItem('rememberedPin');
   };
 
   const handleActionClick = async (selectedAction: string) => {
@@ -258,7 +269,13 @@ const App: React.FC = () => {
           [pin]: selectedAction,
         });
         setTimeCardRecords([...timeCardRecords, { id: data.id, name: data.name, pin, action: record.action, time: record.time, ip: ip }]);
-        setPin('');
+        
+        // Save PIN if remember is checked, otherwise clear it
+        if (rememberPin) {
+          localStorage.setItem('rememberedPin', pin);
+        }
+        
+        setPin(''); // Always clear PIN after action for privacy
         showMessageToUser('Time recorded successfully', 'success');
       })
       .catch((error) => {
@@ -317,145 +334,21 @@ const App: React.FC = () => {
   const getSmartButtons = () => {
     const currentStatus = employeeStatus[pin];
 
-    // Not clocked in - show hero Clock In button
+    // Not clocked in - show Clock In button inside PIN card
     if (!currentStatus || currentStatus === 'clockOut') {
-      return (
-        <div style={{
-          gridColumn: 'span 3',
-          textAlign: 'center',
-          padding: '40px 20px'
-        }}>
-          <div style={{
-            fontSize: '32px',
-            marginBottom: '16px'
-          }}>
-            👋
-          </div>
-          <h2 style={{
-            color: '#1e3a8a',
-            fontSize: '28px',
-            fontWeight: '700',
-            marginBottom: '12px'
-          }}>
-            Ready to Start?
-          </h2>
-          <p style={{
-            color: '#6b7280',
-            fontSize: '16px',
-            marginBottom: '32px'
-          }}>
-            Tap the button below to clock in
-          </p>
-          <button 
-            onClick={() => handleActionClick('clockIn')}
-            style={{ 
-              fontSize: '24px',
-              padding: '28px 60px',
-              background: 'linear-gradient(135deg, #10b981, #059669)',
-              boxShadow: '0 8px 24px rgba(16, 185, 129, 0.4)',
-              transform: 'scale(1)',
-              transition: 'all 0.3s ease'
-            }}
-            onMouseOver={(e) => {
-              e.currentTarget.style.transform = 'scale(1.05)';
-              e.currentTarget.style.boxShadow = '0 12px 32px rgba(16, 185, 129, 0.5)';
-            }}
-            onMouseOut={(e) => {
-              e.currentTarget.style.transform = 'scale(1)';
-              e.currentTarget.style.boxShadow = '0 8px 24px rgba(16, 185, 129, 0.4)';
-            }}
-          >
-            ⚡ CLOCK IN
-          </button>
-          <p style={{
-            color: '#9ca3af',
-            fontSize: '14px',
-            marginTop: '24px',
-            fontStyle: 'italic'
-          }}>
-            Have a productive day! 🚀
-          </p>
-        </div>
-      );
+      return null; // Button will be in PIN card
     }
 
-    // On a specific break/activity - show only the corresponding "End" button
-    if (currentStatus === 'startBreak') {
-      return (
-        <button 
-          onClick={() => handleActionClick('endBreak')}
-          style={{ 
-            gridColumn: 'span 3',
-            fontSize: '24px',
-            padding: '32px'
-          }}
-        >
-          ✅ End Break
-        </button>
-      );
+    // On a specific break/activity - show only the corresponding "End" button in PIN card
+    if (currentStatus === 'startBreak' || 
+        currentStatus === 'startRestroom' || 
+        currentStatus === 'startLunch' || 
+        currentStatus === 'startItIssue' || 
+        currentStatus === 'startMeeting') {
+      return null; // Button will be in PIN card
     }
 
-    if (currentStatus === 'startRestroom') {
-      return (
-        <button 
-          onClick={() => handleActionClick('endRestroom')}
-          style={{ 
-            gridColumn: 'span 3',
-            fontSize: '24px',
-            padding: '32px'
-          }}
-        >
-          ✅ End Restroom
-        </button>
-      );
-    }
-
-    if (currentStatus === 'startLunch') {
-      return (
-        <button 
-          onClick={() => handleActionClick('endLunch')}
-          style={{ 
-            gridColumn: 'span 3',
-            fontSize: '24px',
-            padding: '32px'
-          }}
-        >
-          ✅ End Lunch
-        </button>
-      );
-    }
-
-    if (currentStatus === 'startItIssue') {
-      return (
-        <button 
-          onClick={() => handleActionClick('endItIssue')}
-          style={{ 
-            gridColumn: 'span 3',
-            fontSize: '24px',
-            padding: '32px'
-          }}
-        >
-          ✅ End IT Issue
-        </button>
-      );
-    }
-
-    if (currentStatus === 'startMeeting') {
-      return (
-        <button 
-          onClick={() => handleActionClick('endMeeting')}
-          style={{ 
-            gridColumn: 'span 3',
-            fontSize: '24px',
-            padding: '32px'
-          }}
-        >
-          ✅ End Meeting
-        </button>
-      );
-    }
-
-    // Clocked in - show all available options
+    // Clocked in - show all available options in separate section
     return (
       <>
         <button onClick={() => handleActionClick('clockOut')}>🔴 Clock Out</button>
@@ -466,6 +359,168 @@ const App: React.FC = () => {
         <button onClick={() => handleActionClick('startMeeting')}>📊 Meeting</button>
       </>
     );
+  };
+
+  // Get the single action button for PIN card
+  const getSingleActionButton = () => {
+    if (pin.length !== 4) return null;
+    
+    const currentStatus = employeeStatus[pin];
+
+    // Not clocked in
+    if (!currentStatus || currentStatus === 'clockOut') {
+      return (
+        <button 
+          onClick={() => handleActionClick('clockIn')}
+          style={{ 
+            width: '100%',
+            fontSize: '20px',
+            padding: '18px',
+            margin: '16px 0',
+            background: 'linear-gradient(135deg, #10b981, #059669)',
+            color: 'white',
+            border: 'none',
+            borderRadius: '12px',
+            cursor: 'pointer',
+            fontWeight: '600',
+            boxShadow: '0 4px 12px rgba(16, 185, 129, 0.3)',
+            transition: 'all 0.3s ease'
+          }}
+          onMouseOver={(e) => {
+            e.currentTarget.style.transform = 'translateY(-2px)';
+            e.currentTarget.style.boxShadow = '0 6px 16px rgba(16, 185, 129, 0.4)';
+          }}
+          onMouseOut={(e) => {
+            e.currentTarget.style.transform = 'translateY(0)';
+            e.currentTarget.style.boxShadow = '0 4px 12px rgba(16, 185, 129, 0.3)';
+          }}
+        >
+          ⚡ CLOCK IN
+        </button>
+      );
+    }
+
+    // On break - show End Break
+    if (currentStatus === 'startBreak') {
+      return (
+        <button 
+          onClick={() => handleActionClick('endBreak')}
+          style={{ 
+            width: '100%',
+            fontSize: '20px',
+            padding: '18px',
+            margin: '16px 0',
+            background: 'linear-gradient(135deg, #10b981, #059669)',
+            color: 'white',
+            border: 'none',
+            borderRadius: '12px',
+            cursor: 'pointer',
+            fontWeight: '600',
+            boxShadow: '0 4px 12px rgba(16, 185, 129, 0.3)'
+          }}
+        >
+          ✅ End Break
+        </button>
+      );
+    }
+
+    // On restroom
+    if (currentStatus === 'startRestroom') {
+      return (
+        <button 
+          onClick={() => handleActionClick('endRestroom')}
+          style={{ 
+            width: '100%',
+            fontSize: '20px',
+            padding: '18px',
+            margin: '16px 0',
+            background: 'linear-gradient(135deg, #10b981, #059669)',
+            color: 'white',
+            border: 'none',
+            borderRadius: '12px',
+            cursor: 'pointer',
+            fontWeight: '600',
+            boxShadow: '0 4px 12px rgba(16, 185, 129, 0.3)'
+          }}
+        >
+          ✅ End Restroom
+        </button>
+      );
+    }
+
+    // On lunch
+    if (currentStatus === 'startLunch') {
+      return (
+        <button 
+          onClick={() => handleActionClick('endLunch')}
+          style={{ 
+            width: '100%',
+            fontSize: '20px',
+            padding: '18px',
+            margin: '16px 0',
+            background: 'linear-gradient(135deg, #10b981, #059669)',
+            color: 'white',
+            border: 'none',
+            borderRadius: '12px',
+            cursor: 'pointer',
+            fontWeight: '600',
+            boxShadow: '0 4px 12px rgba(16, 185, 129, 0.3)'
+          }}
+        >
+          ✅ End Lunch
+        </button>
+      );
+    }
+
+    // IT Issue
+    if (currentStatus === 'startItIssue') {
+      return (
+        <button 
+          onClick={() => handleActionClick('endItIssue')}
+          style={{ 
+            width: '100%',
+            fontSize: '20px',
+            padding: '18px',
+            margin: '16px 0',
+            background: 'linear-gradient(135deg, #10b981, #059669)',
+            color: 'white',
+            border: 'none',
+            borderRadius: '12px',
+            cursor: 'pointer',
+            fontWeight: '600',
+            boxShadow: '0 4px 12px rgba(16, 185, 129, 0.3)'
+          }}
+        >
+          ✅ End IT Issue
+        </button>
+      );
+    }
+
+    // Meeting
+    if (currentStatus === 'startMeeting') {
+      return (
+        <button 
+          onClick={() => handleActionClick('endMeeting')}
+          style={{ 
+            width: '100%',
+            fontSize: '20px',
+            padding: '18px',
+            margin: '16px 0',
+            background: 'linear-gradient(135deg, #10b981, #059669)',
+            color: 'white',
+            border: 'none',
+            borderRadius: '12px',
+            cursor: 'pointer',
+            fontWeight: '600',
+            boxShadow: '0 4px 12px rgba(16, 185, 129, 0.3)'
+          }}
+        >
+          ✅ End Meeting
+        </button>
+      );
+    }
+
+    return null;
   };
 
   return (
@@ -485,6 +540,52 @@ const App: React.FC = () => {
       
       <div className="pin-entry">
         <div id="currentPin">Enter PIN: {pin || '____'}</div>
+        
+        {/* Remember PIN checkbox */}
+        {pin.length === 4 && (
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: '8px',
+            margin: '12px 0',
+            fontSize: '14px',
+            color: '#374151'
+          }}>
+            <input
+              type="checkbox"
+              id="rememberPin"
+              checked={rememberPin}
+              onChange={(e) => {
+                setRememberPin(e.target.checked);
+                if (e.target.checked) {
+                  localStorage.setItem('rememberedPin', pin);
+                } else {
+                  localStorage.removeItem('rememberedPin');
+                }
+              }}
+              style={{
+                width: '18px',
+                height: '18px',
+                cursor: 'pointer'
+              }}
+            />
+            <label 
+              htmlFor="rememberPin" 
+              style={{ 
+                cursor: 'pointer',
+                fontWeight: '600',
+                userSelect: 'none'
+              }}
+            >
+              Remember PIN on this device
+            </label>
+          </div>
+        )}
+
+        {/* Single action button (when applicable) */}
+        {getSingleActionButton()}
+        
         <button className="clear-button" onClick={handleClear}>Clear PIN</button>
       </div>
 
