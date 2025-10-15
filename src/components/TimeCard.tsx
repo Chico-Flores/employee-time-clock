@@ -79,23 +79,49 @@ const TimeCard: React.FC<TimeCardProps> = ({ records }) => {
 
   if (records.length === 0) {
     return (
-      <div className="time-card">
-        <p>No records found.</p>
+      <div style={{
+        background: 'white',
+        borderRadius: '20px',
+        padding: '3rem',
+        margin: '0 auto',
+        maxWidth: '1400px',
+        width: '95%',
+        boxShadow: '0 20px 60px rgba(0, 0, 0, 0.3)',
+        textAlign: 'center'
+      }}>
+        <div style={{ fontSize: '64px', marginBottom: '1rem', opacity: 0.3 }}>📋</div>
+        <h2 style={{ color: '#1e3a8a', marginBottom: '10px', fontSize: '1.8rem' }}>No Records Found</h2>
+        <p style={{ color: '#6b7280', fontSize: '1.1rem' }}>Time cards will appear here once employees start clocking in.</p>
       </div>
     );
   }
 
   return (
-    <div className="time-card">
+    <div style={{
+      background: 'white',
+      borderRadius: '20px',
+      padding: '2rem',
+      margin: '0 auto',
+      maxWidth: '1400px',
+      width: '95%',
+      boxShadow: '0 20px 60px rgba(0, 0, 0, 0.3)'
+    }}>
       <div style={{ 
         display: 'flex', 
         justifyContent: 'space-between', 
         alignItems: 'center', 
-        marginBottom: '1.5rem',
+        marginBottom: '2rem',
         flexWrap: 'wrap',
         gap: '1rem'
       }}>
-        <h2 style={{ font: 'bold 1.5rem', margin: 0 }}>{getFilterLabel()}</h2>
+        <div>
+          <h2 style={{ fontSize: '1.8rem', fontWeight: '700', color: '#1e3a8a', margin: '0 0 8px 0' }}>
+            {getFilterLabel()}
+          </h2>
+          <p style={{ color: '#6b7280', margin: 0, fontSize: '0.95rem' }}>
+            {filteredRecords.length} {filteredRecords.length === 1 ? 'record' : 'records'} found
+          </p>
+        </div>
         
         <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
           <button
@@ -104,8 +130,8 @@ const TimeCard: React.FC<TimeCardProps> = ({ records }) => {
               background: filter === 'today' ? 'linear-gradient(135deg, #2563eb, #1e40af)' : '#f3f4f6',
               color: filter === 'today' ? 'white' : '#374151',
               border: filter === 'today' ? 'none' : '2px solid #e5e7eb',
-              padding: '8px 16px',
-              borderRadius: '8px',
+              padding: '10px 20px',
+              borderRadius: '10px',
               cursor: 'pointer',
               fontSize: '14px',
               fontWeight: '600',
@@ -122,8 +148,8 @@ const TimeCard: React.FC<TimeCardProps> = ({ records }) => {
               background: filter === 'week' ? 'linear-gradient(135deg, #2563eb, #1e40af)' : '#f3f4f6',
               color: filter === 'week' ? 'white' : '#374151',
               border: filter === 'week' ? 'none' : '2px solid #e5e7eb',
-              padding: '8px 16px',
-              borderRadius: '8px',
+              padding: '10px 20px',
+              borderRadius: '10px',
               cursor: 'pointer',
               fontSize: '14px',
               fontWeight: '600',
@@ -140,8 +166,8 @@ const TimeCard: React.FC<TimeCardProps> = ({ records }) => {
               background: filter === 'month' ? 'linear-gradient(135deg, #2563eb, #1e40af)' : '#f3f4f6',
               color: filter === 'month' ? 'white' : '#374151',
               border: filter === 'month' ? 'none' : '2px solid #e5e7eb',
-              padding: '8px 16px',
-              borderRadius: '8px',
+              padding: '10px 20px',
+              borderRadius: '10px',
               cursor: 'pointer',
               fontSize: '14px',
               fontWeight: '600',
@@ -158,8 +184,8 @@ const TimeCard: React.FC<TimeCardProps> = ({ records }) => {
               background: filter === 'all' ? 'linear-gradient(135deg, #2563eb, #1e40af)' : '#f3f4f6',
               color: filter === 'all' ? 'white' : '#374151',
               border: filter === 'all' ? 'none' : '2px solid #e5e7eb',
-              padding: '8px 16px',
-              borderRadius: '8px',
+              padding: '10px 20px',
+              borderRadius: '10px',
               cursor: 'pointer',
               fontSize: '14px',
               fontWeight: '600',
@@ -173,71 +199,169 @@ const TimeCard: React.FC<TimeCardProps> = ({ records }) => {
       </div>
 
       {filteredRecords.length === 0 ? (
-        <p style={{ color: '#6b7280', fontStyle: 'italic' }}>No records found for this time period.</p>
+        <div style={{ textAlign: 'center', padding: '3rem', color: '#6b7280' }}>
+          <div style={{ fontSize: '48px', marginBottom: '1rem', opacity: 0.3 }}>📭</div>
+          <p style={{ fontSize: '1.1rem', fontStyle: 'italic' }}>No records found for this time period.</p>
+        </div>
       ) : (
         <>
           {Object.entries(groupedRecords).map(([pin, data], index) => (
-            <div key={index} style={{ marginBottom: '2rem' }}>
-              <h3>{data.name} - {pin}</h3>
-              <table>
-                <thead>
-                  <tr>
-                    <th>Action</th>
-                    <th>Time</th>
-                    <th>IP</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {data.records.map((record, idx) => {
-                    // Determine background color priority
-                    let bgColor = 'white';
-                    
-                    if (record.action === 'Absent') {
-                      bgColor = '#fee2e2'; // Light red for absences
-                    } else if (record.admin_action === true) {
-                      bgColor = '#fef3c7'; // Light yellow for admin actions
-                    } else if (uniqueIps[pin].size > 1) {
-                      bgColor = '#fef08a'; // Brighter yellow for multiple IPs
-                    }
+            <div key={index} style={{ 
+              marginBottom: '2.5rem',
+              background: 'linear-gradient(135deg, #f9fafb 0%, #ffffff 100%)',
+              borderRadius: '16px',
+              padding: '1.5rem',
+              border: '2px solid #e5e7eb'
+            }}>
+              <div style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                marginBottom: '1rem',
+                paddingBottom: '1rem',
+                borderBottom: '2px solid #e5e7eb'
+              }}>
+                <h3 style={{ 
+                  color: '#1e3a8a', 
+                  fontSize: '1.3rem',
+                  fontWeight: '700',
+                  margin: 0
+                }}>
+                  {data.name}
+                </h3>
+                <span style={{
+                  background: '#eff6ff',
+                  color: '#1e40af',
+                  padding: '6px 16px',
+                  borderRadius: '20px',
+                  fontSize: '13px',
+                  fontWeight: '700',
+                  border: '2px solid #bfdbfe'
+                }}>
+                  PIN: {pin}
+                </span>
+              </div>
 
-                    return (
-                      <tr key={idx} style={{ backgroundColor: bgColor }}>
-                        <td>
-                          {record.action === 'Absent' && '❌ '}
-                          {record.admin_action && record.action !== 'Absent' && '🔧 '}
-                          {record.action}
-                          {record.admin_action && <span style={{ color: '#92400e', fontSize: '0.85em', fontStyle: 'italic' }}> (Admin)</span>}
-                          {record.note && (
-                            <div style={{ 
-                              fontSize: '0.85em', 
-                              color: '#6b7280', 
-                              fontStyle: 'italic', 
-                              marginTop: '4px',
-                              paddingLeft: '20px'
-                            }}>
-                              Note: {record.note}
-                            </div>
-                          )}
-                        </td>
-                        <td>{record.time}</td>
-                        <td>
-                          {record.ip}
-                          {uniqueIps[pin].size > 1 && (
-                            <span style={{ 
-                              marginLeft: '8px', 
-                              fontSize: '0.8em', 
-                              color: '#d97706',
-                              fontWeight: 'bold'
-                            }}>
-                              ⚠️ Multiple IPs
-                            </span>
-                          )}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
+              <div style={{ overflowX: 'auto' }}>
+                <table style={{ 
+                  width: '100%',
+                  borderCollapse: 'separate',
+                  borderSpacing: 0
+                }}>
+                  <thead>
+                    <tr style={{ 
+                      background: 'linear-gradient(135deg, #1e3a8a, #2563eb)',
+                      position: 'sticky',
+                      top: 0,
+                      zIndex: 10
+                    }}>
+                      <th style={{
+                        padding: '14px 16px',
+                        textAlign: 'left',
+                        color: 'white',
+                        fontWeight: '600',
+                        fontSize: '13px',
+                        textTransform: 'uppercase',
+                        letterSpacing: '0.5px',
+                        borderRadius: '8px 0 0 0'
+                      }}>Action</th>
+                      <th style={{
+                        padding: '14px 16px',
+                        textAlign: 'left',
+                        color: 'white',
+                        fontWeight: '600',
+                        fontSize: '13px',
+                        textTransform: 'uppercase',
+                        letterSpacing: '0.5px'
+                      }}>Time</th>
+                      <th style={{
+                        padding: '14px 16px',
+                        textAlign: 'left',
+                        color: 'white',
+                        fontWeight: '600',
+                        fontSize: '13px',
+                        textTransform: 'uppercase',
+                        letterSpacing: '0.5px',
+                        borderRadius: '0 8px 0 0'
+                      }}>IP Address</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {data.records.map((record, idx) => {
+                      // Determine background color priority
+                      let bgColor = 'white';
+                      
+                      if (record.action === 'Absent') {
+                        bgColor = '#fee2e2'; // Light red for absences
+                      } else if (record.admin_action === true) {
+                        bgColor = '#fef3c7'; // Light yellow for admin actions
+                      } else if (uniqueIps[pin].size > 1) {
+                        bgColor = '#fef08a'; // Brighter yellow for multiple IPs
+                      }
+
+                      return (
+                        <tr key={idx} style={{ 
+                          backgroundColor: bgColor,
+                          borderBottom: idx === data.records.length - 1 ? 'none' : '1px solid #e5e7eb',
+                          transition: 'all 0.2s ease'
+                        }}
+                        onMouseOver={(e) => {
+                          e.currentTarget.style.backgroundColor = '#e0f2fe';
+                        }}
+                        onMouseOut={(e) => {
+                          e.currentTarget.style.backgroundColor = bgColor;
+                        }}>
+                          <td style={{ 
+                            padding: '14px 16px',
+                            fontWeight: '600',
+                            color: '#374151'
+                          }}>
+                            {record.action === 'Absent' && '❌ '}
+                            {record.admin_action && record.action !== 'Absent' && '🔧 '}
+                            {record.action}
+                            {record.admin_action && <span style={{ color: '#92400e', fontSize: '0.85em', fontStyle: 'italic', marginLeft: '6px' }}>(Admin)</span>}
+                            {record.note && (
+                              <div style={{ 
+                                fontSize: '0.85em', 
+                                color: '#6b7280', 
+                                fontStyle: 'italic', 
+                                marginTop: '6px',
+                                paddingLeft: '20px',
+                                fontWeight: 'normal'
+                              }}>
+                                💬 {record.note}
+                              </div>
+                            )}
+                          </td>
+                          <td style={{ 
+                            padding: '14px 16px',
+                            color: '#374151'
+                          }}>{record.time}</td>
+                          <td style={{ 
+                            padding: '14px 16px',
+                            color: '#374151'
+                          }}>
+                            {record.ip}
+                            {uniqueIps[pin].size > 1 && (
+                              <span style={{ 
+                                marginLeft: '10px', 
+                                fontSize: '0.8em', 
+                                color: '#d97706',
+                                fontWeight: 'bold',
+                                background: '#fef3c7',
+                                padding: '4px 8px',
+                                borderRadius: '6px'
+                              }}>
+                                ⚠️ Multiple IPs
+                              </span>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
             </div>
           ))}
         </>
