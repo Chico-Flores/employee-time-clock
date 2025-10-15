@@ -5,6 +5,7 @@ import TimeCard from './TimeCard';
 import HoursCalculator from './HoursCalculator';
 import DownloadRecords from './DownloadRecords';
 import AddEmployee from './AddEmployee';
+import ManageEmployees from './ManageEmployees';
 
 interface AdminTabsProps {
   records: { id: number; name: string; pin: string; action: string; time: string; ip: string; admin_action?: boolean; note?: string }[];
@@ -19,7 +20,7 @@ const AdminTabs: React.FC<AdminTabsProps> = ({
   onRecordsUpdate,
   onAddEmployeeSuccess 
 }) => {
-  const [activeTab, setActiveTab] = useState<'live' | 'timecards' | 'actions' | 'reports'>('live');
+  const [activeTab, setActiveTab] = useState<'live' | 'timecards' | 'actions' | 'employees' | 'reports'>('live');
 
   return (
     <div className="admin-tabs-container">
@@ -42,6 +43,12 @@ const AdminTabs: React.FC<AdminTabsProps> = ({
           onClick={() => setActiveTab('actions')}
         >
           ⚙️ Actions
+        </button>
+        <button 
+          className={`tab-btn ${activeTab === 'employees' ? 'active' : ''}`}
+          onClick={() => setActiveTab('employees')}
+        >
+          👥 Employees
         </button>
         <button 
           className={`tab-btn ${activeTab === 'reports' ? 'active' : ''}`}
@@ -79,6 +86,15 @@ const AdminTabs: React.FC<AdminTabsProps> = ({
               onAddSuccess={onAddEmployeeSuccess} 
               onCloseOverlay={() => {}} 
               inline={true}
+            />
+          </div>
+        )}
+
+        {activeTab === 'employees' && (
+          <div className="tab-panel">
+            <ManageEmployees 
+              showMessageToUser={showMessageToUser}
+              onEmployeeDeleted={onRecordsUpdate}
             />
           </div>
         )}
