@@ -552,6 +552,41 @@ app.post('/delete-employee', requireAdmin, async (req, res) => {
     }
 });
 
+// NEW ROUTE: Update employee tags - ADMIN ONLY
+app.post('/update-employee-tags', requireAdmin, async (req, res) => {
+    const { pin, tags } = req.body;
+    
+    console.log('Update employee tags attempt - Session:', req.session);
+    
+    try {
+        const db = getDB();
+        
+        // Validate tags array
+        if (!Array.isArray(tags)) {
+            return res.status(400).json({ error: 'Tags must be an array' });
+        }
+        
+        // Update employee with tags
+        const result = await db.collection('users').updateOne(
+            { pin },
+            { $set: { tags: tags } }
+        );
+        
+        if (result.matchedCount === 0) {
+            return res.status(404).json({ error: 'Employee not found' });
+        }
+        
+        console.log(`Employee tags updated: PIN ${pin}, Tags: ${tags.join(', ')}`);
+        res.status(200).json({ 
+            success: true, 
+            message: 'Tags updated successfully'
+        });
+    } catch (error) {
+        console.error('Update tags error:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
 // Start server after DB connection
 connectDB().then(() => {
     app.listen(PORT, '0.0.0.0', () => {
