@@ -316,21 +316,65 @@ const App: React.FC = () => {
   const getSmartButtons = () => {
     const currentStatus = employeeStatus[pin];
 
-    // Not clocked in - show only Clock In
+    // Not clocked in - show hero Clock In button
     if (!currentStatus || currentStatus === 'clockOut') {
       return (
-        <>
+        <div style={{
+          gridColumn: 'span 3',
+          textAlign: 'center',
+          padding: '40px 20px'
+        }}>
+          <div style={{
+            fontSize: '32px',
+            marginBottom: '16px'
+          }}>
+            👋
+          </div>
+          <h2 style={{
+            color: '#1e3a8a',
+            fontSize: '28px',
+            fontWeight: '700',
+            marginBottom: '12px'
+          }}>
+            Ready to Start?
+          </h2>
+          <p style={{
+            color: '#6b7280',
+            fontSize: '16px',
+            marginBottom: '32px'
+          }}>
+            Tap the button below to clock in
+          </p>
           <button 
             onClick={() => handleActionClick('clockIn')}
             style={{ 
-              gridColumn: 'span 3',
               fontSize: '24px',
-              padding: '32px'
+              padding: '28px 60px',
+              background: 'linear-gradient(135deg, #10b981, #059669)',
+              boxShadow: '0 8px 24px rgba(16, 185, 129, 0.4)',
+              transform: 'scale(1)',
+              transition: 'all 0.3s ease'
+            }}
+            onMouseOver={(e) => {
+              e.currentTarget.style.transform = 'scale(1.05)';
+              e.currentTarget.style.boxShadow = '0 12px 32px rgba(16, 185, 129, 0.5)';
+            }}
+            onMouseOut={(e) => {
+              e.currentTarget.style.transform = 'scale(1)';
+              e.currentTarget.style.boxShadow = '0 8px 24px rgba(16, 185, 129, 0.4)';
             }}
           >
-            ⚡ Clock In
+            ⚡ CLOCK IN
           </button>
-        </>
+          <p style={{
+            color: '#9ca3af',
+            fontSize: '14px',
+            marginTop: '24px',
+            fontStyle: 'italic'
+          }}>
+            Have a productive day! 🚀
+          </p>
+        </div>
       );
     }
 
