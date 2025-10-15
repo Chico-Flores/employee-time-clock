@@ -17,6 +17,7 @@ const App: React.FC = () => {
   const [pin, setPin] = useState('');
   const [currentTime, setCurrentTime] = useState('');
   const [showAddEmployee, setShowAddEmployee] = useState(false);
+  const [rememberPin, setRememberPin] = useState(false);
   const [timeCardRecords, setTimeCardRecords] = useState<{ id: number; name: string; pin: string; action: string; time: string; ip: string; admin_action?: boolean; note?: string }[]>([]);
   const [employeeStatus, setEmployeeStatus] = useState<{ [pin: string]: string }>({});
   const isOverlayShowing = showCreateAdmin || showLogin || showAddEmployee;
