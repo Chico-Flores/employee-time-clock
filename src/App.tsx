@@ -612,9 +612,12 @@ const App: React.FC = () => {
       <div id="message-container"></div>
       <div className="main-container">
         <Keypad onKeyPress={handleKeyPress} />
-        <div className="action-buttons">
-          {getSmartButtons()}
-        </div>
+        {/* Only show action buttons container when there are multiple buttons */}
+        {getSmartButtons() && (
+          <div className="action-buttons">
+            {getSmartButtons()}
+          </div>
+        )}
       </div>
       
       {/* Dashboard Stats - Show below action buttons when logged in */}
