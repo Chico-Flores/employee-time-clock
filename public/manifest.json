@@ -1,0 +1,34 @@
+{
+  "name": "Employee Time Clock",
+  "short_name": "Time Clock",
+  "description": "PowerHouze Group Employee Time Clock - Clock in, out, and track your time",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#1e3a8a",
+  "theme_color": "#2563eb",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "categories": ["business", "productivity"],
+  "shortcuts": [
+    {
+      "name": "Clock In",
+      "short_name": "Clock In",
+      "description": "Quick clock in",
+      "url": "/?action=clockin",
+      "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
+    }
+  ]
+}
