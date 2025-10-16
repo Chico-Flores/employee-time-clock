@@ -271,7 +271,7 @@ const App: React.FC = () => {
       'clockOut': ['clockIn', 'endBreak', 'endRestroom', 'endLunch', 'endItIssue', 'endMeeting'],
       'startBreak': ['clockIn', 'endRestroom', 'endLunch', 'endItIssue', 'endMeeting'],
       'endBreak': ['startBreak'],
-      'startRestroom': ['clockIn', 'endBreak', 'endLunch', 'endItIssue', 'endMeeting'],
+      'startRestroom': ['clockIn', 'endBreak', 'endRestroom', 'endLunch', 'endItIssue', 'endMeeting'],
       'endRestroom': ['startRestroom'],
       'startLunch': ['clockIn', 'endBreak', 'endRestroom', 'endItIssue', 'endMeeting'],
       'endLunch': ['startLunch'],
