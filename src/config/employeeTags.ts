@@ -12,8 +12,8 @@ export const EMPLOYEE_TAG_OPTIONS: TagOption[] = [
   { label: 'Team Lead', color: '#3b82f6', bgColor: '#dbeafe' },
   { label: 'MX', color: '#8b5cf6', bgColor: '#ede9fe' },
   { label: 'EG', color: '#f59e0b', bgColor: '#fef3c7' },
-  { label: 'PH', color: '#ef4444', bgColor: '#fee2e2' },
-  { label: 'Closer', color: '#14b8a6', bgColor: '#ccfbf1' },
+  { label: 'PH', color: '#f97316', bgColor: '#ffedd5' },
+  { label: 'Closer', color: '#ef4444', bgColor: '#fee2e2' },
   { label: 'Dialer', color: '#06b6d4', bgColor: '#cffafe' },
   { label: 'New Agent', color: '#ec4899', bgColor: '#fce7f3' },
   
