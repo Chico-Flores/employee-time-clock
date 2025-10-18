@@ -65,29 +65,17 @@ const QuickAdminLogin: React.FC<QuickAdminLoginProps> = ({
     <div style={{ width: '100%' }}>
       <div style={{ 
         textAlign: 'center', 
-        marginBottom: '24px',
-        padding: '16px',
-        background: '#eff6ff',
-        borderRadius: '12px',
-        border: '2px solid #bfdbfe'
+        marginBottom: '24px'
       }}>
-        <div style={{ fontSize: '32px', marginBottom: '8px' }}>🔑</div>
+        <div style={{ fontSize: '48px', marginBottom: '12px' }}>🔑</div>
         <h2 style={{ 
-          margin: '0 0 8px 0', 
-          color: '#1e40af', 
-          fontSize: '1.3rem',
+          margin: '0', 
+          color: '#1e3a8a', 
+          fontSize: '1.5rem',
           fontWeight: '700'
         }}>
           Quick Admin Access
         </h2>
-        <p style={{ 
-          margin: 0, 
-          color: '#1e40af', 
-          fontSize: '14px',
-          lineHeight: '1.5'
-        }}>
-          Employees with Admin tag can access<br/>the admin panel with just their PIN
-        </p>
       </div>
 
       <div>
