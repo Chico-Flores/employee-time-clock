@@ -689,6 +689,7 @@ const App: React.FC = () => {
           showMessageToUser={showMessageToUser}
           onRecordsUpdate={refreshRecords}
           onAddEmployeeSuccess={onAddEmployeeSuccess}
+          employeeStatus={employeeStatus}
         />
       )}
       
