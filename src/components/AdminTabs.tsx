@@ -1,5 +1,3 @@
-// src/components/AdminTabs.tsx
-// REPLACE your existing AdminTabs.tsx with this version
 import React, { useState } from 'react';
 import LiveDashboard from './LiveDashboard';
 import ManualClockOut from './ManualClockOut';
