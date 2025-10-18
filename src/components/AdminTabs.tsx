@@ -1,3 +1,5 @@
+// src/components/AdminTabs.tsx
+// REPLACE with this version - fixes import issue
 import React, { useState } from 'react';
 import LiveDashboard from './LiveDashboard';
 import ManualClockOut from './ManualClockOut';
@@ -8,7 +10,6 @@ import DownloadRecords from './DownloadRecords';
 import AddEmployee from './AddEmployee';
 import ManageEmployees from './ManageEmployees';
 import EmployeeTags from './EmployeeTags';
-import AutoClockOutSettings from './AutoClockOutSettings';
 
 interface AdminTabsProps {
   records: { id: number; name: string; pin: string; action: string; time: string; ip: string; admin_action?: boolean; note?: string }[];
@@ -106,9 +107,6 @@ const AdminTabs: React.FC<AdminTabsProps> = ({
               onAddSuccess={onAddEmployeeSuccess} 
               onCloseOverlay={() => {}} 
               inline={true}
-            />
-            <AutoClockOutSettings 
-              showMessageToUser={showMessageToUser}
             />
           </div>
         )}
