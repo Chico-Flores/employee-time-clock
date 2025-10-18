@@ -1,4 +1,7 @@
+// src/components/AdminTabs.tsx
+// REPLACE your existing AdminTabs.tsx with this version
 import React, { useState } from 'react';
+import LiveDashboard from './LiveDashboard';
 import ManualClockOut from './ManualClockOut';
 import MarkAbsent from './MarkAbsent';
 import TimeCard from './TimeCard';
@@ -6,32 +9,41 @@ import HoursCalculator from './HoursCalculator';
 import DownloadRecords from './DownloadRecords';
 import AddEmployee from './AddEmployee';
 import ManageEmployees from './ManageEmployees';
-import EmployeeTags from './EmployeeTags'; // Already imported, just need to use it
+import EmployeeTags from './EmployeeTags';
+import AutoClockOutSettings from './AutoClockOutSettings';
 
 interface AdminTabsProps {
   records: { id: number; name: string; pin: string; action: string; time: string; ip: string; admin_action?: boolean; note?: string }[];
   showMessageToUser: (text: string, type: 'success' | 'error' | 'warning' | 'info') => void;
   onRecordsUpdate: () => void;
   onAddEmployeeSuccess: () => void;
+  employeeStatus: { [pin: string]: string };
 }
 
 const AdminTabs: React.FC<AdminTabsProps> = ({ 
   records, 
   showMessageToUser, 
   onRecordsUpdate,
-  onAddEmployeeSuccess 
+  onAddEmployeeSuccess,
+  employeeStatus
 }) => {
-  const [activeTab, setActiveTab] = useState<'live' | 'timecards' | 'actions' | 'employees' | 'reports'>('live');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'live' | 'timecards' | 'actions' | 'employees' | 'reports'>('dashboard');
 
   return (
     <div className="admin-tabs-container">
       {/* Tab Navigation */}
       <div className="tab-navigation">
         <button 
+          className={`tab-btn ${activeTab === 'dashboard' ? 'active' : ''}`}
+          onClick={() => setActiveTab('dashboard')}
+        >
+          📊 Dashboard
+        </button>
+        <button 
           className={`tab-btn ${activeTab === 'live' ? 'active' : ''}`}
           onClick={() => setActiveTab('live')}
         >
-          🏠 Live Status
+          🔧 Manual Actions
         </button>
         <button 
           className={`tab-btn ${activeTab === 'timecards' ? 'active' : ''}`}
@@ -43,7 +55,7 @@ const AdminTabs: React.FC<AdminTabsProps> = ({
           className={`tab-btn ${activeTab === 'actions' ? 'active' : ''}`}
           onClick={() => setActiveTab('actions')}
         >
-          ⚙️ Actions
+          ⚙️ Settings
         </button>
         <button 
           className={`tab-btn ${activeTab === 'employees' ? 'active' : ''}`}
@@ -55,12 +67,21 @@ const AdminTabs: React.FC<AdminTabsProps> = ({
           className={`tab-btn ${activeTab === 'reports' ? 'active' : ''}`}
           onClick={() => setActiveTab('reports')}
         >
-          📊 Reports
+          📈 Reports
         </button>
       </div>
 
       {/* Tab Content */}
       <div className="tab-content">
+        {activeTab === 'dashboard' && (
+          <div className="tab-panel">
+            <LiveDashboard 
+              records={records}
+              employeeStatus={employeeStatus}
+            />
+          </div>
+        )}
+
         {activeTab === 'live' && (
           <div className="tab-panel">
             <ManualClockOut 
@@ -88,6 +109,9 @@ const AdminTabs: React.FC<AdminTabsProps> = ({
               onCloseOverlay={() => {}} 
               inline={true}
             />
+            <AutoClockOutSettings 
+              showMessageToUser={showMessageToUser}
+            />
           </div>
         )}
 
@@ -97,7 +121,6 @@ const AdminTabs: React.FC<AdminTabsProps> = ({
               showMessageToUser={showMessageToUser}
               onEmployeeDeleted={onRecordsUpdate}
             />
-            {/* ADD EMPLOYEE TAGS HERE */}
             <EmployeeTags 
               showMessageToUser={showMessageToUser}
               onTagsUpdated={onRecordsUpdate}
