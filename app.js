@@ -19,6 +19,11 @@ const DISCORD_WEBHOOK_URL = process.env.DISCORD_WEBHOOK_URL;
 const MONGODB_URI = process.env.MONGODB_URI || 'mongodb+srv://timeclockuser:Pckings9$@timeclock.awtl8gt.mongodb.net/?retryWrites=true&w=majority&appName=timeclock';
 const DB_NAME = 'timeclock';
 
+// AUTO CLOCK-OUT CONFIGURATION
+const AUTO_CLOCKOUT_ENABLED = process.env.AUTO_CLOCKOUT_ENABLED !== 'false'; // Default: enabled
+const AUTO_CLOCKOUT_HOUR = parseInt(process.env.AUTO_CLOCKOUT_HOUR || '16'); // Default: 4 PM (16:00)
+const AUTO_CLOCKOUT_MINUTE = parseInt(process.env.AUTO_CLOCKOUT_MINUTE || '30'); // Default: 30 minutes
+
 const corsOptions = {
     origin: true,
     credentials: true,
@@ -185,6 +190,109 @@ async function sendAbsenceNotification(name, date) {
         }
     } catch (error) {
         console.error('Error sending absence notification:', error);
+    }
+}
+
+// AUTO CLOCK-OUT FUNCTION
+async function performAutoClockOut() {
+    try {
+        console.log('⏰ Checking for auto clock-out...');
+        
+        // Get current PST time
+        const now = new Date();
+        const pstDate = new Date(now.toLocaleString('en-US', { 
+            timeZone: 'America/Los_Angeles' 
+        }));
+        
+        const currentHour = pstDate.getHours();
+        const currentMinute = pstDate.getMinutes();
+        
+        // Only proceed if it's exactly the configured time
+        if (currentHour !== AUTO_CLOCKOUT_HOUR || currentMinute !== AUTO_CLOCKOUT_MINUTE) {
+            return;
+        }
+        
+        console.log(`⏰ It's ${AUTO_CLOCKOUT_HOUR}:${AUTO_CLOCKOUT_MINUTE.toString().padStart(2, '0')} PST - Starting auto clock-out...`);
+        
+        const db = getDB();
+        const records = await db.collection('records').find({}).toArray();
+        
+        // Find currently working employees
+        const recordsByPin = {};
+        records.forEach(record => {
+            if (!recordsByPin[record.pin]) {
+                recordsByPin[record.pin] = [];
+            }
+            recordsByPin[record.pin].push(record);
+        });
+        
+        const employeesToClockOut = [];
+        Object.keys(recordsByPin).forEach(pin => {
+            const empRecords = recordsByPin[pin];
+            empRecords.sort((a, b) => new Date(b.time).getTime() - new Date(a.time).getTime());
+            const lastRecord = empRecords[0];
+            
+            const workingActions = ['ClockIn', 'EndBreak', 'EndRestroom', 'EndLunch', 'EndItIssue', 'EndMeeting'];
+            if (workingActions.includes(lastRecord.action)) {
+                employeesToClockOut.push({
+                    pin: lastRecord.pin,
+                    name: lastRecord.name
+                });
+            }
+        });
+        
+        if (employeesToClockOut.length === 0) {
+            console.log('⏰ No employees to auto clock-out');
+            return;
+        }
+        
+        console.log(`⏰ Auto clocking out ${employeesToClockOut.length} employee(s)...`);
+        
+        // Get IP for auto clock-out
+        let ip = 'AUTO-SYSTEM';
+        try {
+            const ipResponse = await fetch('https://api.ipify.org?format=json');
+            const ipData = await ipResponse.json();
+            ip = ipData.ip + '-AUTO';
+        } catch (error) {
+            console.error('Could not fetch IP for auto clock-out:', error);
+        }
+        
+        const currentTime = getPSTTime();
+        
+        // Clock out each employee
+        for (const employee of employeesToClockOut) {
+            try {
+                const recordData = {
+                    name: employee.name,
+                    pin: employee.pin,
+                    action: 'ClockOut',
+                    time: currentTime,
+                    ip: ip,
+                    admin_action: true,
+                    note: 'Automatic clock-out at 4:30 PM PST'
+                };
+                
+                await db.collection('records').insertOne(recordData);
+                
+                // Send Discord notification
+                await sendDiscordNotification(
+                    employee.name, 
+                    'ClockOut', 
+                    currentTime, 
+                    true, 
+                    'Automatic clock-out at 4:30 PM PST'
+                );
+                
+                console.log(`✅ Auto clocked out: ${employee.name} (PIN: ${employee.pin})`);
+            } catch (error) {
+                console.error(`❌ Failed to auto clock-out ${employee.name}:`, error);
+            }
+        }
+        
+        console.log(`⏰ Auto clock-out completed: ${employeesToClockOut.length} employee(s)`);
+    } catch (error) {
+        console.error('❌ Error during auto clock-out:', error);
     }
 }
 
@@ -587,12 +695,33 @@ app.post('/update-employee-tags', requireAdmin, async (req, res) => {
     }
 });
 
+// NEW ROUTE: Test auto clock-out - ADMIN ONLY
+app.post('/test-auto-clockout', requireAdmin, async (req, res) => {
+    try {
+        console.log('🧪 Manual test of auto clock-out triggered');
+        await performAutoClockOut();
+        res.json({ success: true, message: 'Auto clock-out test completed' });
+    } catch (error) {
+        console.error('Test auto clock-out error:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
 // Start server after DB connection
 connectDB().then(() => {
     app.listen(PORT, '0.0.0.0', () => {
         console.log(`✅ Server running on port ${PORT}`);
         console.log(`🕐 Server time zone: PST (America/Los_Angeles)`);
         console.log(`🕐 Current PST time: ${getPSTTime()}`);
+        
+        // Schedule auto clock-out check
+        if (AUTO_CLOCKOUT_ENABLED) {
+            // Run every minute to check for auto clock-out time
+            setInterval(performAutoClockOut, 60000); // Check every 60 seconds
+            console.log(`⏰ Auto clock-out scheduled for ${AUTO_CLOCKOUT_HOUR}:${AUTO_CLOCKOUT_MINUTE.toString().padStart(2, '0')} PST daily`);
+        } else {
+            console.log('⏰ Auto clock-out is DISABLED');
+        }
     });
 }).catch(error => {
     console.error('❌ Failed to start server:', error);
