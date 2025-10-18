@@ -527,6 +527,58 @@ app.post('/login', async (req, res) => {
     }
 });
 
+// NEW ROUTE: Quick admin login using PIN for employees with "Admin" tag
+app.post('/quick-admin-login', async (req, res) => {
+    const { pin } = req.body;
+    
+    try {
+        const db = getDB();
+        
+        // Find employee by PIN
+        const employee = await db.collection('users').findOne({ pin });
+        
+        if (!employee) {
+            return res.status(401).json({ error: 'Invalid PIN' });
+        }
+        
+        // Check if employee has the "Admin" tag
+        if (!employee.tags || !employee.tags.includes('Admin')) {
+            return res.status(403).json({ 
+                error: 'Access denied: Admin tag required for quick admin access' 
+            });
+        }
+        
+        // Don't allow if this is an actual admin account (has username)
+        if (employee.username) {
+            return res.status(403).json({ 
+                error: 'Please use username/password login for admin accounts' 
+            });
+        }
+
+        // Grant admin access via session
+        req.session.admin = true;
+        req.session.quickAdmin = true; // Flag to indicate this is a quick admin session
+        req.session.adminName = employee.name;
+        req.session.adminPin = employee.pin;
+        
+        req.session.save(err => {
+            if (err) {
+                console.error('Session save error:', err);
+                return res.status(500).json({ error: 'Failed to create session' });
+            }
+            
+            console.log(`✅ Quick admin login: ${employee.name} (PIN: ${pin})`);
+            res.json({ 
+                success: true,
+                name: employee.name
+            });
+        });
+    } catch (error) {
+        console.error('Quick admin login error:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
 // Route to logout
 app.post('/logout', (req, res) => {
     req.session.destroy((err) => {
