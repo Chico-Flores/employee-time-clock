@@ -1,5 +1,3 @@
-// src/components/TimeCard.tsx
-// REPLACE your existing TimeCard.tsx with this version
 import React, { useState, useEffect } from 'react';
 
 interface Record {
