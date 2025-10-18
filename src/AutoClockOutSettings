@@ -1,0 +1,231 @@
+// src/components/AutoClockOutSettings.tsx
+import React, { useState } from 'react';
+
+interface AutoClockOutSettingsProps {
+  showMessageToUser: (text: string, type: 'success' | 'error' | 'warning' | 'info') => void;
+}
+
+const AutoClockOutSettings: React.FC<AutoClockOutSettingsProps> = ({ showMessageToUser }) => {
+  const [testing, setTesting] = useState(false);
+
+  const handleTestAutoClockOut = async () => {
+    const confirmed = window.confirm(
+      '⚠️ TEST AUTO CLOCK-OUT\n\n' +
+      'This will clock out all currently working employees right now.\n\n' +
+      'Are you sure you want to test this feature?'
+    );
+
+    if (!confirmed) return;
+
+    setTesting(true);
+
+    try {
+      const response = await fetch('/test-auto-clockout', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' }
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Test failed');
+      }
+
+      showMessageToUser('Auto clock-out test completed successfully', 'success');
+    } catch (error: any) {
+      console.error('Test error:', error);
+      showMessageToUser(`Test failed: ${error.message}`, 'error');
+    } finally {
+      setTesting(false);
+    }
+  };
+
+  return (
+    <div style={{ 
+      background: 'white', 
+      borderRadius: '20px', 
+      padding: '2rem', 
+      margin: '2rem auto', 
+      maxWidth: '1400px',
+      width: '95%',
+      boxShadow: '0 20px 60px rgba(0, 0, 0, 0.3)' 
+    }}>
+      <h2 style={{ color: '#1e3a8a', marginBottom: '10px', fontSize: '1.8rem' }}>
+        ⏰ Automatic Clock-Out
+      </h2>
+      <p style={{ color: '#666', marginBottom: '30px' }}>
+        Automatically clock out all working employees at 4:30 PM PST daily
+      </p>
+
+      {/* Status Banner */}
+      <div style={{
+        background: 'linear-gradient(135deg, #10b981, #059669)',
+        borderRadius: '16px',
+        padding: '24px',
+        marginBottom: '24px',
+        color: 'white',
+        display: 'flex',
+        alignItems: 'center',
+        gap: '16px'
+      }}>
+        <div style={{ fontSize: '48px' }}>✅</div>
+        <div>
+          <h3 style={{ margin: '0 0 8px 0', fontSize: '1.3rem', fontWeight: '700' }}>
+            Auto Clock-Out is ENABLED
+          </h3>
+          <p style={{ margin: 0, fontSize: '15px', opacity: 0.95 }}>
+            All working employees will be automatically clocked out at <strong>4:30 PM PST</strong> every day
+          </p>
+        </div>
+      </div>
+
+      {/* How It Works */}
+      <div style={{ 
+        background: '#f9fafb',
+        borderRadius: '16px',
+        padding: '24px',
+        marginBottom: '24px',
+        border: '2px solid #e5e7eb'
+      }}>
+        <h3 style={{ 
+          margin: '0 0 16px 0', 
+          color: '#1e3a8a', 
+          fontSize: '1.2rem',
+          fontWeight: '700'
+        }}>
+          🔄 How It Works
+        </h3>
+        <ul style={{ 
+          margin: 0, 
+          paddingLeft: '24px', 
+          color: '#374151', 
+          lineHeight: '1.8',
+          fontSize: '15px'
+        }}>
+          <li>System checks every minute for the configured time (4:30 PM PST)</li>
+          <li>At 4:30 PM PST, automatically finds all employees currently working</li>
+          <li>Clocks out each employee with an admin note: "Automatic clock-out at 4:30 PM PST"</li>
+          <li>Sends Discord notifications for each auto clock-out</li>
+          <li>Records appear in Time Cards with the 🔧 admin indicator</li>
+          <li>Works alongside manual clock-outs - no conflicts</li>
+        </ul>
+      </div>
+
+      {/* Configuration Info */}
+      <div style={{ 
+        background: '#eff6ff',
+        borderRadius: '16px',
+        padding: '24px',
+        marginBottom: '24px',
+        border: '2px solid #bfdbfe'
+      }}>
+        <h3 style={{ 
+          margin: '0 0 16px 0', 
+          color: '#1e40af', 
+          fontSize: '1.2rem',
+          fontWeight: '700'
+        }}>
+          ⚙️ Configuration
+        </h3>
+        <div style={{ color: '#1e40af', fontSize: '15px', lineHeight: '1.8' }}>
+          <p style={{ margin: '0 0 12px 0' }}>
+            <strong>Time:</strong> 4:30 PM PST (16:30)
+          </p>
+          <p style={{ margin: '0 0 12px 0' }}>
+            <strong>Status:</strong> Enabled by default
+          </p>
+          <p style={{ margin: '0' }}>
+            <strong>To modify:</strong> Set environment variables:
+          </p>
+          <ul style={{ margin: '8px 0 0 0', paddingLeft: '24px' }}>
+            <li><code>AUTO_CLOCKOUT_ENABLED=false</code> - Disable feature</li>
+            <li><code>AUTO_CLOCKOUT_HOUR=17</code> - Change hour (24-hour format)</li>
+            <li><code>AUTO_CLOCKOUT_MINUTE=0</code> - Change minute</li>
+          </ul>
+        </div>
+      </div>
+
+      {/* Test Button */}
+      <div style={{
+        background: '#fef3c7',
+        borderRadius: '16px',
+        padding: '24px',
+        border: '2px solid #fbbf24'
+      }}>
+        <h3 style={{ 
+          margin: '0 0 12px 0', 
+          color: '#92400e', 
+          fontSize: '1.1rem',
+          fontWeight: '700'
+        }}>
+          🧪 Test Auto Clock-Out
+        </h3>
+        <p style={{ margin: '0 0 16px 0', color: '#92400e', fontSize: '14px' }}>
+          Test the auto clock-out feature right now (will clock out all currently working employees)
+        </p>
+        <button
+          onClick={handleTestAutoClockOut}
+          disabled={testing}
+          style={{
+            background: testing 
+              ? '#9ca3af' 
+              : 'linear-gradient(135deg, #f59e0b, #d97706)',
+            color: 'white',
+            padding: '14px 32px',
+            border: 'none',
+            borderRadius: '12px',
+            cursor: testing ? 'not-allowed' : 'pointer',
+            fontSize: '16px',
+            fontWeight: '600',
+            boxShadow: testing ? 'none' : '0 4px 12px rgba(245, 158, 11, 0.3)',
+            transition: 'all 0.3s ease',
+            opacity: testing ? 0.6 : 1
+          }}
+          onMouseOver={(e) => {
+            if (!testing) {
+              e.currentTarget.style.background = 'linear-gradient(135deg, #d97706, #b45309)';
+              e.currentTarget.style.transform = 'translateY(-2px)';
+            }
+          }}
+          onMouseOut={(e) => {
+            if (!testing) {
+              e.currentTarget.style.background = 'linear-gradient(135deg, #f59e0b, #d97706)';
+              e.currentTarget.style.transform = 'translateY(0)';
+            }
+          }}
+        >
+          {testing ? '⏳ Testing...' : '🧪 Run Test Now'}
+        </button>
+      </div>
+
+      {/* Safety Notes */}
+      <div style={{ 
+        marginTop: '24px', 
+        padding: '20px', 
+        background: '#fef2f2', 
+        borderRadius: '12px',
+        border: '2px solid #fecaca'
+      }}>
+        <h4 style={{ margin: '0 0 10px 0', color: '#991b1b', fontSize: '15px' }}>
+          ⚠️ Important Notes
+        </h4>
+        <ul style={{ 
+          margin: 0, 
+          paddingLeft: '20px', 
+          color: '#991b1b', 
+          lineHeight: '1.8',
+          fontSize: '14px'
+        }}>
+          <li>This feature runs automatically every day at 4:30 PM PST</li>
+          <li>Employees can still clock in after auto clock-out if needed</li>
+          <li>All auto clock-outs are marked as admin actions in records</li>
+          <li>Discord notifications are sent for each auto clock-out</li>
+          <li>The test button will clock out employees immediately - use with caution</li>
+          <li>To disable, set environment variable AUTO_CLOCKOUT_ENABLED=false</li>
+        </ul>
+      </div>
+    </div>
+  );
+};
+
+export default AutoClockOutSettings;
