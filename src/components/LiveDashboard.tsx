@@ -1,5 +1,3 @@
-// src/components/LiveDashboard.tsx
-// NEW FILE - Create this beautiful dashboard component
 import React, { useState, useEffect } from 'react';
 
 interface Employee {
