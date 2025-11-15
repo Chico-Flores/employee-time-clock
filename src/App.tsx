@@ -267,7 +267,7 @@ const App: React.FC = () => {
     const lastAction = employeeStatus[pin];
 
     const validTransitions: { [key: string]: string[] } = {
-      'clockIn': ['clockOut', undefined],
+      'clockIn': ['clockOut', 'absent', undefined],
       'clockOut': ['clockIn', 'endBreak', 'endRestroom', 'endLunch', 'endItIssue', 'endMeeting'],
       'startBreak': ['clockIn', 'endRestroom', 'endLunch', 'endItIssue', 'endMeeting'],
       'endBreak': ['startBreak'],
