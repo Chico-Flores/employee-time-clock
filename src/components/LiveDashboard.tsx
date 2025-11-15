@@ -116,7 +116,7 @@ const LiveDashboard: React.FC<LiveDashboardProps> = ({ records, employeeStatus }
 
     if (absentToday) {
       acc.absent.push(empWithStatus);
-    } else if (!status || status === 'clockOut') {
+    } else if (!status || status === 'clockOut' || status === 'absent') {
       acc.notClockedIn.push(empWithStatus);
     } else if (['startBreak', 'startLunch', 'startRestroom'].includes(status)) {
       acc.onBreak.push(empWithStatus);
