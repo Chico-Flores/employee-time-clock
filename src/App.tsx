@@ -384,7 +384,7 @@ const App: React.FC = () => {
     const currentStatus = employeeStatus[pin];
 
     // Not clocked in - show Clock In button inside PIN card
-    if (!currentStatus || currentStatus === 'clockOut') {
+    if (!currentStatus || currentStatus === 'clockOut' || currentStatus === 'absent') {
       return null; // Button will be in PIN card
     }
 
@@ -417,7 +417,7 @@ const App: React.FC = () => {
     const currentStatus = employeeStatus[pin];
 
     // Not clocked in
-    if (!currentStatus || currentStatus === 'clockOut') {
+    if (!currentStatus || currentStatus === 'clockOut' || currentStatus === 'absent') {
       return (
         <button 
           onClick={() => handleActionClick('clockIn')}
