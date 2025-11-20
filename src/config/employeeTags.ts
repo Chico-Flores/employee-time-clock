@@ -13,9 +13,10 @@ export const EMPLOYEE_TAG_OPTIONS: TagOption[] = [
   { label: 'Team Lead', color: '#f59e0b', bgColor: '#fef3c7' },    // Amber - leadership
   
   // Locations
-  { label: 'MX', color: '#10b981', bgColor: '#d1fae5' },           // Green - Mexico
+  { label: 'TJ', color: '#10b981', bgColor: '#d1fae5' },           // Green - Mexico
   { label: 'EG', color: '#0ea5e9', bgColor: '#e0f2fe' },           // Sky Blue - Egypt
   { label: 'PH', color: '#f97316', bgColor: '#ffedd5' },           // Orange - Philippines
+  { label: 'RS', color: '#8b5cf6', bgColor: '#ede9fe' },          // Purple - Rosarito
   
   // Roles
   { label: 'Closer', color: '#dc2626', bgColor: '#fee2e2' },       // Red - high priority
