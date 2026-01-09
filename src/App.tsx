@@ -244,7 +244,7 @@ const App: React.FC = () => {
       const minutes = pstTime.getMinutes();
       const currentMinutes = hours * 60 + minutes; // Convert to total minutes since midnight
       
-      const earliestClockIn = 6 * 60 + 50; // 6:15 AM in minutes (410)
+      const earliestClockIn = 6 * 60 + 15; // 6:15 AM in minutes (410)
       const latestClockIn = 16 * 60; // 4:00 PM in minutes (960)
       const lateThreshold = 7 * 60 + 10; // 7:10 AM in minutes (430)
       
