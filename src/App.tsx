@@ -236,7 +236,7 @@ const App: React.FC = () => {
       return;
     }
 
-    // Clock-in time restrictions and late detection (6:50 AM - 4:00 PM PST)
+    // Clock-in time restrictions and late detection (6:15 AM - 4:00 PM PST)
     if (selectedAction === 'clockIn') {
       const now = new Date();
       const pstTime = new Date(now.toLocaleString('en-US', { timeZone: 'America/Los_Angeles' }));
@@ -244,12 +244,12 @@ const App: React.FC = () => {
       const minutes = pstTime.getMinutes();
       const currentMinutes = hours * 60 + minutes; // Convert to total minutes since midnight
       
-      const earliestClockIn = 6 * 60 + 50; // 6:50 AM in minutes (410)
+      const earliestClockIn = 6 * 60 + 50; // 6:15 AM in minutes (410)
       const latestClockIn = 16 * 60; // 4:00 PM in minutes (960)
       const lateThreshold = 7 * 60 + 10; // 7:10 AM in minutes (430)
       
       if (currentMinutes < earliestClockIn) {
-        showMessageToUser('❌ Clock-in not allowed before 6:50 AM PST', 'error');
+        showMessageToUser('❌ Clock-in not allowed before 6:15 AM PST', 'error');
         return;
       }
       
