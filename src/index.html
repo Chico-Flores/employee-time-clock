@@ -30,10 +30,11 @@
           .then((registration) => {
             console.log('Service Worker registered successfully:', registration.scope);
             
-            // Check for updates periodically
-            setInterval(() => {
-              registration.update();
-            }, 60000); // Check every minute
+            // Check for updates when the app is reopened. (A once-a-minute timer
+            // here kept the server awake 24/7 from any open tab.)
+            document.addEventListener('visibilitychange', () => {
+              if (document.visibilityState === 'visible') registration.update();
+            });
           })
           .catch((error) => {
             console.log('Service Worker registration failed:', error);

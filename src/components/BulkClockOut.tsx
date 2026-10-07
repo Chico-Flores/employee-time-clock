@@ -40,24 +40,6 @@ const BulkClockOut: React.FC<BulkClockOutProps> = ({
     setLoading(true);
 
     try {
-      // Get PST time
-      const date = new Date();
-      const currentTime = date.toLocaleString('en-US', {
-        timeZone: 'America/Los_Angeles',
-        year: 'numeric',
-        month: '2-digit',
-        day: '2-digit',
-        hour: '2-digit',
-        minute: '2-digit',
-        second: '2-digit',
-        hour12: true
-      });
-
-      // Get IP
-      const ipResponse = await fetch('https://api.ipify.org?format=json');
-      const ipData = await ipResponse.json();
-      const ip = ipData.ip;
-
       // Clock out each employee
       const clockOutPromises = currentlyWorking.map(employee => 
         fetch('/manual-clock-out', {
@@ -65,8 +47,6 @@ const BulkClockOut: React.FC<BulkClockOutProps> = ({
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             pin: employee.pin,
-            time: currentTime,
-            ip: ip,
             note: 'Bulk clock-out by admin'
           })
         })

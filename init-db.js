@@ -1,7 +1,7 @@
 const { MongoClient } = require('mongodb');
 
-// MongoDB connection string
-const MONGODB_URI = process.env.MONGODB_URI || 'mongodb+srv://timeclockuser:Pckings9$@timeclock.awtl8gt.mongodb.net/?retryWrites=true&w=majority&appName=timeclock';
+// MongoDB connection string - set MONGODB_URI in the environment (never commit it)
+const MONGODB_URI = process.env.MONGODB_URI;
 const DB_NAME = 'timeclock';
 
 let client;

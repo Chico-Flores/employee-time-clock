@@ -39,10 +39,12 @@ const LiveDashboard: React.FC<LiveDashboardProps> = ({ records, employeeStatus }
     absent: false
   });
 
-  // Auto-refresh every 30 seconds
+  // Auto-refresh every 30 seconds while the tab is visible
   useEffect(() => {
     fetchEmployees();
-    const interval = setInterval(fetchEmployees, 30000);
+    const interval = setInterval(() => {
+      if (document.visibilityState === 'visible') fetchEmployees();
+    }, 30000);
     return () => clearInterval(interval);
   }, []);
 

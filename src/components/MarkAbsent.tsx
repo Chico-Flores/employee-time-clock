@@ -74,17 +74,12 @@ const MarkAbsent: React.FC<MarkAbsentProps> = ({ showMessageToUser, onMarkAbsent
     setLoading(true);
 
     try {
-      const ipResponse = await fetch('https://api.ipify.org?format=json');
-      const ipData = await ipResponse.json();
-      const ip = ipData.ip;
-
       const response = await fetch('/mark-absent', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           pin: selectedPin,
-          date: pstDate,
-          ip: ip
+          date: pstDate
         })
       });
 
@@ -108,7 +103,6 @@ const MarkAbsent: React.FC<MarkAbsentProps> = ({ showMessageToUser, onMarkAbsent
               body: JSON.stringify({
                 pin: selectedPin,
                 date: pstDate,
-                ip: ip,
                 force: true
               })
             });
