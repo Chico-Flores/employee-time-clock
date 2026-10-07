@@ -24,8 +24,8 @@ A simple web-based employee time clock application built with React.
 3. **Start the Application** (Development)
 
    ```bash
-   # serves application to port 3001
-   npm start
+   # builds the frontend and serves the app on port 3001
+   npm run dev
    ```
 
 4. **Build the Application** (Production)
@@ -34,6 +34,25 @@ A simple web-based employee time clock application built with React.
    # builds application in the 'dist' folder
    npm run build
    ```
+
+## Configuration (environment variables)
+
+Set these on the hosting service (Render → service → Environment). Never commit them.
+
+| Variable | Required | Purpose |
+|---|---|---|
+| `MONGODB_URI` | yes | MongoDB Atlas connection string |
+| `SESSION_SECRET` | recommended | Any long random string. Keeps admins logged in across restarts |
+| `DISCORD_WEBHOOK_URL` | optional | Channel for clock-in/out/break notifications |
+| `ABSENCE_WEBHOOK_URL` | optional | Channel for "marked absent" alerts |
+| `CRON_SECRET` | for auto clock-out | Shared secret for the scheduled auto clock-out job |
+| `AUTO_CLOCKOUT_ENABLED` / `AUTO_CLOCKOUT_HOUR` / `AUTO_CLOCKOUT_MINUTE` | optional | Defaults: enabled, 16:30 PST |
+
+### Auto clock-out
+
+The server clocks everyone out at 4:30 PM PST (needs an always-on instance).
+`POST /cron/auto-clockout` with header `x-cron-secret: $CRON_SECRET` triggers the same
+clock-out from an external scheduler if the server ever runs on a plan that sleeps.
 
 ## Usage
 

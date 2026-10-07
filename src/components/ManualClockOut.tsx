@@ -78,25 +78,7 @@ const ManualClockOut: React.FC<ManualClockOutProps> = ({ records, showMessageToU
     setLoading({ ...loading, [employee.pin]: true });
     
     try {
-      // Get PST time
-      const date = new Date();
-      const currentTime = date.toLocaleString('en-US', {
-        timeZone: 'America/Los_Angeles',
-        year: 'numeric',
-        month: '2-digit',
-        day: '2-digit',
-        hour: '2-digit',
-        minute: '2-digit',
-        second: '2-digit',
-        hour12: true
-      });
-      
-      // Get IP first
-      const ipResponse = await fetch('https://api.ipify.org?format=json');
-      const ipData = await ipResponse.json();
-      const ip = ipData.ip;
-
-      // Then make the clock-out request
+      // Time and IP are recorded by the server
       const response = await fetch('/manual-clock-out', {
         method: 'POST',
         headers: { 
@@ -104,8 +86,6 @@ const ManualClockOut: React.FC<ManualClockOutProps> = ({ records, showMessageToU
         },
         body: JSON.stringify({
           pin: employee.pin,
-          time: currentTime,
-          ip: ip,
           note: notes[employee.pin] || ''
         })
       });

@@ -81,21 +81,18 @@ const App: React.FC = () => {
       .then((data) => {
         setIsLoggedIn(data.isLoggedIn);
         if (!data.isLoggedIn) {
-          fetch('/get-users', { method: 'POST' })
+          // Kiosk mode: only check whether first-time setup is needed.
+          // Employee status is looked up per PIN (see below).
+          fetch('/has-users')
             .then((response) => response.json())
-            .then((users) => {
-              if (users.length === 0) {
+            .then(({ hasUsers }) => {
+              if (!hasUsers) {
                 setShowCreateAdmin(true);
               } else {
-                fetch('/get-records', { method: 'POST' })
-                  .then((response) => response.json())
-                  .then((records) => {
-                    setShowLoginButton(true);
-                    setTimeCardRecords(records);
-                  })
-                  .catch((error) => console.error('Error checking records:', error));
+                setShowLoginButton(true);
               }
             })
+            .catch((error) => console.error('Error checking users:', error));
         } else {
           // If already logged in, fetch records immediately
           fetch('/get-records', { method: 'POST' })
@@ -133,6 +130,38 @@ const App: React.FC = () => {
     }
   }, [timeCardRecords]);
 
+  // Kiosk mode: look up the entered PIN's current status from the server
+  useEffect(() => {
+    if (isLoggedIn || pin.length !== 4) return;
+
+    let cancelled = false;
+    fetch('/employee-status', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ pin })
+    })
+      .then(async (response) => {
+        if (response.status === 403) {
+          const data = await response.json();
+          if (!cancelled) showMessageToUser(data.error, 'error');
+          return null;
+        }
+        return response.ok ? response.json() : null;
+      })
+      .then((data) => {
+        if (cancelled || !data) return;
+        const status = data.action ? data.action.charAt(0).toLowerCase() + data.action.slice(1) : undefined;
+        setEmployeeStatus((prev) => {
+          const next = { ...prev };
+          if (status) next[pin] = status; else delete next[pin];
+          return next;
+        });
+      })
+      .catch((error) => console.error('Error loading employee status:', error));
+
+    return () => { cancelled = true; };
+  }, [pin, isLoggedIn]);
+
   useEffect(() => {
     if (!showCreateAdmin && !showLogin) {
       timeClockContainerRef.current?.focus();
@@ -145,7 +174,7 @@ const App: React.FC = () => {
 
   useEffect(() => {
     const logout = () => {
-      fetch('/logout').then(() => {
+      fetch('/logout', { method: 'POST' }).then(() => {
         setShowLoginButton(true);
         window.location.reload();
       });
@@ -171,10 +200,12 @@ const App: React.FC = () => {
     };
   }, [lastInteractionTime]);
 
-  // Auto-refresh records every 30 seconds when logged in
+  // Auto-refresh records every 30 seconds when logged in and the tab is visible
+  // (hidden tabs don't poll, so the server can sleep when nobody is looking)
   useEffect(() => {
     if (isLoggedIn) {
       const interval = setInterval(() => {
+        if (document.visibilityState !== 'visible') return;
         fetch('/get-records', { method: 'POST' })
           .then((response) => response.json())
           .then((records) => setTimeCardRecords(records))
@@ -294,18 +325,13 @@ const App: React.FC = () => {
       return;
     }
 
-    // Use PST time
-    const pstTime = getPSTTime();
-    const record = { action: selectedAction.charAt(0).toUpperCase() + selectedAction.slice(1), time: pstTime };
-
-    let ipResponse = await fetch('https://api.ipify.org?format=json');
-    let ipData = await ipResponse.json();
-    let ip = ipData.ip;
+    // Time and IP are recorded by the server
+    const action = selectedAction.charAt(0).toUpperCase() + selectedAction.slice(1);
 
     fetch('/add-record', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ pin, action: record.action, time: record.time, ip: ip })
+      body: JSON.stringify({ pin, action })
     })
       .then((response) => {
         if (!response.ok) return response.json().then((error) => Promise.reject(error));
@@ -316,7 +342,9 @@ const App: React.FC = () => {
           ...employeeStatus,
           [pin]: selectedAction,
         });
-        setTimeCardRecords([...timeCardRecords, { id: data.id, name: data.name, pin, action: record.action, time: record.time, ip: ip }]);
+        if (isLoggedIn) {
+          setTimeCardRecords([...timeCardRecords, { id: data.id, name: data.name, pin, action, time: data.time, ip: data.ip }]);
+        }
         
         // Save PIN if remember is checked
         if (rememberPin) {
@@ -329,6 +357,15 @@ const App: React.FC = () => {
       })
       .catch((error) => {
         console.error('Error adding record:', error.error);
+        // Server says the status changed (e.g. clocked in from another device) - resync
+        if (error.lastAction !== undefined) {
+          const synced = error.lastAction ? error.lastAction.charAt(0).toLowerCase() + error.lastAction.slice(1) : undefined;
+          setEmployeeStatus((prev) => {
+            const next = { ...prev };
+            if (synced) next[pin] = synced; else delete next[pin];
+            return next;
+          });
+        }
         showMessageToUser('Error adding record: ' + error.error, 'error');
       });
   };
@@ -695,7 +732,7 @@ const App: React.FC = () => {
       
       {/* Keep Add Employee popup button for quick access */}
       {!isOverlayShowing && isLoggedIn && <button id="addEmployeeButton" onClick={() => { setShowAddEmployee(true) }}>➕ Add Employee</button>}
-      {!isOverlayShowing && isLoggedIn && <button id="logoutButton" onClick={() => { setShowLoginButton(true); setIsLoggedIn(false); }}>🚪 Logout</button>}
+      {!isOverlayShowing && isLoggedIn && <button id="logoutButton" onClick={() => { fetch('/logout', { method: 'POST' }).finally(() => window.location.reload()); }}>🚪 Logout</button>}
     </div>
   );
 };

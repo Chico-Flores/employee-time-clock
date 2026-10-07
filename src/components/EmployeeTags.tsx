@@ -34,7 +34,7 @@ const EmployeeTags: React.FC<EmployeeTagsProps> = ({ showMessageToUser, onTagsUp
       .then((response) => response.json())
       .then((users) => {
         const employeeList = users
-          .filter((user: any) => !user.username && user.pin && user.name)
+          .filter((user: any) => !user.username && user.pin && user.name && user.active !== false)
           .map((user: any) => ({ 
             name: user.name, 
             pin: user.pin,
