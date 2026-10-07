@@ -20,6 +20,7 @@ export const EMPLOYEE_TAG_OPTIONS: TagOption[] = [
   
   // Roles
   { label: 'Closer', color: '#dc2626', bgColor: '#fee2e2' },       // Red - high priority
+  { label: 'Jr Closer', color: '#e11d48', bgColor: '#ffe4e6' },    // Rose - closer in training
   { label: 'Dialer', color: '#2563eb', bgColor: '#dbeafe' },       // Blue - active calling
   { label: 'New Agent', color: '#ec4899', bgColor: '#fce7f3' },    // Pink - new/training
 ];
