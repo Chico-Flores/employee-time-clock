@@ -1,739 +1,138 @@
-import React, { useState, useEffect, useRef } from 'react';
-import Keypad from './components/Keypad';
-import CreateAdmin from './components/CreateAdmin';
-import AddEmployee from './components/AddEmployee';
+import React, { useCallback, useEffect, useState } from 'react';
+import Kiosk from './components/Kiosk';
+import AdminPortal from './components/admin/AdminPortal';
 import Login from './components/Login';
-import DashboardStats from './components/DashboardStats';
-import AdminTabs from './components/AdminTabs';
-import PWAInstaller from './components/PWAInstaller';
+import CreateAdmin from './components/CreateAdmin';
 import './assets/css/styles.css';
+import './assets/css/app.css';
 
-// Helper function to format employee status for display
-const formatStatusDisplay = (status: string): { text: string; emoji: string } => {
-  const statusMap: { [key: string]: { text: string; emoji: string } } = {
-    'clockIn': { text: 'Clocked In & Working', emoji: '🟢' },
-    'endBreak': { text: 'Clocked In & Working', emoji: '🟢' },
-    'endRestroom': { text: 'Clocked In & Working', emoji: '🟢' },
-    'endLunch': { text: 'Clocked In & Working', emoji: '🟢' },
-    'endItIssue': { text: 'Clocked In & Working', emoji: '🟢' },
-    'endMeeting': { text: 'Clocked In & Working', emoji: '🟢' },
-    'startBreak': { text: 'On Break', emoji: '☕' },
-    'startLunch': { text: 'On Lunch', emoji: '🍔' },
-    'startRestroom': { text: 'Restroom Break', emoji: '🚻' },
-    'startItIssue': { text: 'Having IT Issues', emoji: '💻' },
-    'startMeeting': { text: 'In a Meeting', emoji: '📊' },
-    'clockOut': { text: 'Clocked Out', emoji: '🔴' }
-  };
+type MessageType = 'success' | 'error' | 'warning' | 'info';
 
-  return statusMap[status] || { text: status, emoji: '⚪' };
+const THEME_COLORS: { [theme: string]: string } = { default: '#1e40af', halloween: '#1a0b2e' };
+const ADMIN_IDLE_LOGOUT_MS = 30 * 60 * 1000;
+
+// Toasts are appended straight to #message-container so any component can raise one
+const showMessage = (text: string, type: MessageType) => {
+  const container = document.getElementById('message-container');
+  if (!container) return;
+  const message = document.createElement('div');
+  message.className = `toast toast-${type}`;
+  message.setAttribute('role', type === 'error' ? 'alert' : 'status');
+  message.textContent = text;
+  container.appendChild(message);
+  requestAnimationFrame(() => message.classList.add('show'));
+  setTimeout(() => {
+    message.classList.remove('show');
+    setTimeout(() => message.remove(), 400);
+  }, type === 'error' ? 5000 : 3800);
 };
 
 const App: React.FC = () => {
-  const timeClockContainerRef = useRef<HTMLDivElement>(null);
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [auth, setAuth] = useState<'checking' | 'in' | 'out'>('checking');
+  const [view, setView] = useState<'kiosk' | 'admin'>('kiosk');
+  const [theme, setTheme] = useState('default');
   const [showLogin, setShowLogin] = useState(false);
-  const [showLoginButton, setShowLoginButton] = useState(false);
-  const [showCreateAdmin, setShowCreateAdmin] = useState(false);
-  const [pin, setPin] = useState('');
-  const [currentTime, setCurrentTime] = useState('');
-  const [showAddEmployee, setShowAddEmployee] = useState(false);
-  const [rememberPin, setRememberPin] = useState(false);
-  const [timeCardRecords, setTimeCardRecords] = useState<{ id: number; name: string; pin: string; action: string; time: string; ip: string; admin_action?: boolean; note?: string }[]>([]);
-  const [employeeStatus, setEmployeeStatus] = useState<{ [pin: string]: string }>({});
-  const isOverlayShowing = showCreateAdmin || showLogin || showAddEmployee;
-  const [lastInteractionTime, setLastInteractionTime] = useState(new Date());
+  const [needsSetup, setNeedsSetup] = useState(false);
 
-  // Function to get PST time
-  const getPSTTime = () => {
-    const date = new Date();
-    return date.toLocaleString('en-US', {
-      timeZone: 'America/Los_Angeles',
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-      hour: '2-digit',
-      minute: '2-digit',
-      second: '2-digit',
-      hour12: true
-    });
-  };
-
+  // Session check / first-run setup
   useEffect(() => {
-    // Update clock to PST every second
-    const updateTime = () => setCurrentTime(getPSTTime());
-    updateTime(); // Initial call
-    const timer = setInterval(updateTime, 1000);
-    return () => clearInterval(timer);
-  }, []);
-
-  // Load saved PIN on mount
-  useEffect(() => {
-    const savedPin = localStorage.getItem('rememberedPin');
-    if (savedPin) {
-      setPin(savedPin);
-      setRememberPin(true);
-    }
-  }, []);
-
-  useEffect(() => {
-    fetch('/is-logged-in')
-      .then((response) => response.json())
-      .then((data) => {
-        setIsLoggedIn(data.isLoggedIn);
-        if (!data.isLoggedIn) {
-          // Kiosk mode: only check whether first-time setup is needed.
-          // Employee status is looked up per PIN (see below).
-          fetch('/has-users')
-            .then((response) => response.json())
-            .then(({ hasUsers }) => {
-              if (!hasUsers) {
-                setShowCreateAdmin(true);
-              } else {
-                setShowLoginButton(true);
-              }
-            })
-            .catch((error) => console.error('Error checking users:', error));
-        } else {
-          // If already logged in, fetch records immediately
-          fetch('/get-records', { method: 'POST' })
-            .then((response) => response.json())
-            .then((records) => setTimeCardRecords(records))
-            .catch((error) => console.error('Error loading records:', error));
-        }
-      })
-      .catch((error) => console.error('Error checking login status:', error));
-  }, [setIsLoggedIn, setTimeCardRecords]);
-
-  // Load employee status from existing records
-  useEffect(() => {
-    if (timeCardRecords.length > 0) {
-      const statusMap: { [pin: string]: string } = {};
-      
-      const recordsByPin: { [pin: string]: typeof timeCardRecords } = {};
-      timeCardRecords.forEach(record => {
-        if (!recordsByPin[record.pin]) {
-          recordsByPin[record.pin] = [];
-        }
-        recordsByPin[record.pin].push(record);
-      });
-      
-      Object.keys(recordsByPin).forEach(pin => {
-        const records = recordsByPin[pin];
-        records.sort((a, b) => new Date(a.time).getTime() - new Date(b.time).getTime());
-        const lastRecord = records[records.length - 1];
-        
-        const action = lastRecord.action.charAt(0).toLowerCase() + lastRecord.action.slice(1);
-        statusMap[pin] = action;
-      });
-      
-      setEmployeeStatus(statusMap);
-    }
-  }, [timeCardRecords]);
-
-  // Kiosk mode: look up the entered PIN's current status from the server
-  useEffect(() => {
-    if (isLoggedIn || pin.length !== 4) return;
-
-    let cancelled = false;
-    fetch('/employee-status', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ pin })
-    })
-      .then(async (response) => {
-        if (response.status === 403) {
-          const data = await response.json();
-          if (!cancelled) showMessageToUser(data.error, 'error');
-          return null;
-        }
-        return response.ok ? response.json() : null;
-      })
-      .then((data) => {
-        if (cancelled || !data) return;
-        const status = data.action ? data.action.charAt(0).toLowerCase() + data.action.slice(1) : undefined;
-        setEmployeeStatus((prev) => {
-          const next = { ...prev };
-          if (status) next[pin] = status; else delete next[pin];
-          return next;
-        });
-      })
-      .catch((error) => console.error('Error loading employee status:', error));
-
-    return () => { cancelled = true; };
-  }, [pin, isLoggedIn]);
-
-  useEffect(() => {
-    if (!showCreateAdmin && !showLogin) {
-      timeClockContainerRef.current?.focus();
-    }
-  }, [showCreateAdmin, showLogin]);
-
-  const handleInteraction = () => {
-    setLastInteractionTime(new Date());
-  };
-
-  useEffect(() => {
-    const logout = () => {
-      fetch('/logout', { method: 'POST' }).then(() => {
-        setShowLoginButton(true);
-        window.location.reload();
-      });
-    };
-
-    const logoutTimer = setTimeout(() => {
-      const now = new Date();
-      const timeDiff = now.getTime() - lastInteractionTime.getTime();
-      if (timeDiff >= 30 * 60 * 1000) {
-        logout();
-      }
-    }, 30 * 60 * 1000);
-
-    window.addEventListener('mousemove', handleInteraction);
-    window.addEventListener('keydown', handleInteraction);
-    window.addEventListener('click', handleInteraction);
-
-    return () => {
-      clearTimeout(logoutTimer);
-      window.removeEventListener('mousemove', handleInteraction);
-      window.removeEventListener('keydown', handleInteraction);
-      window.removeEventListener('click', handleInteraction);
-    };
-  }, [lastInteractionTime]);
-
-  // Auto-refresh records every 30 seconds when logged in and the tab is visible
-  // (hidden tabs don't poll, so the server can sleep when nobody is looking)
-  useEffect(() => {
-    if (isLoggedIn) {
-      const interval = setInterval(() => {
-        if (document.visibilityState !== 'visible') return;
-        fetch('/get-records', { method: 'POST' })
-          .then((response) => response.json())
-          .then((records) => setTimeCardRecords(records))
-          .catch((error) => console.error('Error refreshing records:', error));
-      }, 30000);
-      return () => clearInterval(interval);
-    }
-  }, [isLoggedIn]);
-
-  const handleKeyPress = (key: string) => {
-    if (pin.length < 4 && key.trim() !== '' && !isNaN(Number(key))) {
-      setPin(pin + key);
-    }
-  };
-
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (!isNaN(Number(e.key)) && !isOverlayShowing) {
-      handleKeyPress(e.key);
-    }
-    if (e.key === 'Backspace' || e.key === 'Delete') {
-      handleBackspace();
-    }
-    if (e.key === 'Enter' && isOverlayShowing) {
-      if (showLogin) {
-        let loginButton = document.getElementById('login');
-        loginButton?.click();
-      }
-      if (showCreateAdmin) {
-        let createAdminButton = document.getElementById('createAdmin');
-        createAdminButton?.click();
-      }
-      if (showAddEmployee) {
-        let addEmployeeButton = document.getElementById('addEmployee');
-        addEmployeeButton?.click();
-      }
-    }
-  };
-
-  const handleBackspace = () => {
-    setPin(pin.slice(0, -1));
-  };
-
-  const handleClear = () => {
-    setPin('');
-    setRememberPin(false);
-    localStorage.removeItem('rememberedPin');
-  };
-
-  const handleActionClick = async (selectedAction: string) => {
-    if (pin === '') {
-      document.body.scrollTo(0, 0);
-      let currentPin = document.getElementById('currentPin');
-      if (currentPin) {
-        currentPin.style.borderColor = '#ef4444';
-        setTimeout(() => { currentPin.style.borderColor = '#e5e7eb'; }, 250);
-        setTimeout(() => { currentPin.style.borderColor = '#ef4444'; }, 500);
-        setTimeout(() => { currentPin.style.borderColor = '#e5e7eb'; }, 750);
-      }
-      return;
-    }
-
-    // Clock-in time restrictions and late detection (6:15 AM - 4:00 PM PST)
-    if (selectedAction === 'clockIn') {
-      const now = new Date();
-      const pstTime = new Date(now.toLocaleString('en-US', { timeZone: 'America/Los_Angeles' }));
-      const hours = pstTime.getHours();
-      const minutes = pstTime.getMinutes();
-      const currentMinutes = hours * 60 + minutes; // Convert to total minutes since midnight
-      
-      const earliestClockIn = 6 * 60 + 15; // 6:15 AM in minutes (410)
-      const latestClockIn = 16 * 60; // 4:00 PM in minutes (960)
-      const lateThreshold = 7 * 60 + 10; // 7:10 AM in minutes (430)
-      
-      if (currentMinutes < earliestClockIn) {
-        showMessageToUser('❌ Clock-in not allowed before 6:15 AM PST', 'error');
-        return;
-      }
-      
-      if (currentMinutes >= latestClockIn) {
-        showMessageToUser('❌ Clock-in not allowed after 4:00 PM PST', 'error');
-        return;
-      }
-
-      // Show warning if late (after 7:10 AM)
-      if (currentMinutes > lateThreshold) {
-        showMessageToUser('⚠️ Late clock-in recorded (after 7:10 AM)', 'warning');
-      }
-    }
-
-    const lastAction = employeeStatus[pin];
-
-    const validTransitions: { [key: string]: string[] } = {
-      'clockIn': ['clockOut', 'absent', undefined],
-      'clockOut': ['clockIn', 'endBreak', 'endRestroom', 'endLunch', 'endItIssue', 'endMeeting'],
-      'startBreak': ['clockIn', 'endRestroom', 'endLunch', 'endItIssue', 'endMeeting'],
-      'endBreak': ['startBreak'],
-      'startRestroom': ['clockIn', 'endBreak', 'endRestroom', 'endLunch', 'endItIssue', 'endMeeting'],
-      'endRestroom': ['startRestroom'],
-      'startLunch': ['clockIn', 'endBreak', 'endRestroom', 'endItIssue', 'endMeeting'],
-      'endLunch': ['startLunch'],
-      'startItIssue': ['clockIn', 'endBreak', 'endRestroom', 'endLunch', 'endMeeting'],
-      'endItIssue': ['startItIssue'],
-      'startMeeting': ['clockIn', 'endBreak', 'endRestroom', 'endLunch', 'endItIssue'],
-      'endMeeting': ['startMeeting']
-    };
-
-    if (!validTransitions[selectedAction]?.includes(lastAction)) {
-      let message = `Invalid action: ${selectedAction}, Last Action: ${lastAction || 'None'}`;
-      if (selectedAction === 'clockOut' && !lastAction) message = 'You must clock in before you can clock out';
-      if (['startBreak', 'startRestroom', 'startLunch', 'startItIssue', 'startMeeting'].includes(selectedAction) && !lastAction) {
-        message = 'You must clock in first';
-      }
-      if (selectedAction.startsWith('end') && !lastAction?.startsWith('start')) {
-        message = `You must start ${selectedAction.replace('end', '').toLowerCase()} before you can end it`;
-      }
-      showMessageToUser(message, 'error');
-      return;
-    }
-
-    // Time and IP are recorded by the server
-    const action = selectedAction.charAt(0).toUpperCase() + selectedAction.slice(1);
-
-    fetch('/add-record', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ pin, action })
-    })
-      .then((response) => {
-        if (!response.ok) return response.json().then((error) => Promise.reject(error));
-        return response.json();
-      })
-      .then((data) => {
-        setEmployeeStatus({
-          ...employeeStatus,
-          [pin]: selectedAction,
-        });
+    fetch('/is-logged-in', { credentials: 'include' })
+      .then(r => r.json())
+      .then(({ isLoggedIn }) => {
         if (isLoggedIn) {
-          setTimeCardRecords([...timeCardRecords, { id: data.id, name: data.name, pin, action, time: data.time, ip: data.ip }]);
+          setAuth('in');
+          setView('admin');
+          return;
         }
-        
-        // Save PIN if remember is checked
-        if (rememberPin) {
-          localStorage.setItem('rememberedPin', pin);
-        }
-        
-        // Keep PIN in place so employee can continue taking actions
-        // They can manually clear it when done using the "Clear PIN" button
-        showMessageToUser('Time recorded successfully', 'success');
+        setAuth('out');
+        return fetch('/has-users').then(r => r.json()).then(({ hasUsers }) => setNeedsSetup(!hasUsers));
       })
-      .catch((error) => {
-        console.error('Error adding record:', error.error);
-        // Server says the status changed (e.g. clocked in from another device) - resync
-        if (error.lastAction !== undefined) {
-          const synced = error.lastAction ? error.lastAction.charAt(0).toLowerCase() + error.lastAction.slice(1) : undefined;
-          setEmployeeStatus((prev) => {
-            const next = { ...prev };
-            if (synced) next[pin] = synced; else delete next[pin];
-            return next;
-          });
-        }
-        showMessageToUser('Error adding record: ' + error.error, 'error');
-      });
-  };
+      .catch(() => setAuth('out'));
+  }, []);
 
-  function showMessageToUser(text: string, type: 'success' | 'error' | 'warning' | 'info') {
-    const messageContainer = document.getElementById('message-container');
-    const message = document.createElement('p');
-    message.classList.add(`${type}-message`);
-    message.textContent = text;
-    messageContainer?.appendChild(message);
-    message.classList.add('show');
-    setTimeout(() => {
-      message.classList.add('hide');
-      setTimeout(() => { messageContainer?.removeChild(message); }, 1000);
-    }, 3000);
-  }
+  // Holiday theme: set by admins, refreshed periodically so open kiosks pick it up
+  const loadTheme = useCallback(() => {
+    fetch('/settings')
+      .then(r => r.json())
+      .then(d => d.theme && setTheme(d.theme))
+      .catch(() => { /* keep current theme */ });
+  }, []);
+  useEffect(() => {
+    loadTheme();
+    const id = setInterval(loadTheme, 5 * 60 * 1000);
+    const onVisible = () => document.visibilityState === 'visible' && loadTheme();
+    document.addEventListener('visibilitychange', onVisible);
+    return () => {
+      clearInterval(id);
+      document.removeEventListener('visibilitychange', onVisible);
+    };
+  }, [loadTheme]);
+
+  const inAdmin = auth === 'in' && view === 'admin';
+
+  useEffect(() => {
+    const root = document.documentElement;
+    root.dataset.theme = theme;
+    root.dataset.view = inAdmin ? 'admin' : 'kiosk';
+    document.querySelector('meta[name="theme-color"]')?.setAttribute('content', inAdmin ? '#0f172a' : THEME_COLORS[theme] || THEME_COLORS.default);
+    document.title = inAdmin ? 'Admin · Time Clock' : 'Employee Time Clock';
+  }, [theme, inAdmin]);
+
+  const logout = useCallback(() => {
+    fetch('/logout', { method: 'POST', credentials: 'include' }).finally(() => {
+      setAuth('out');
+      setView('kiosk');
+    });
+  }, []);
+
+  // Log admins out after 30 minutes without interaction
+  useEffect(() => {
+    if (auth !== 'in') return;
+    let timer = setTimeout(logout, ADMIN_IDLE_LOGOUT_MS);
+    const reset = () => {
+      clearTimeout(timer);
+      timer = setTimeout(logout, ADMIN_IDLE_LOGOUT_MS);
+    };
+    const events = ['mousemove', 'keydown', 'click', 'touchstart'];
+    events.forEach(e => window.addEventListener(e, reset, { passive: true }));
+    return () => {
+      clearTimeout(timer);
+      events.forEach(e => window.removeEventListener(e, reset));
+    };
+  }, [auth, logout]);
 
   const onLoginSuccess = () => {
     setShowLogin(false);
-    setShowLoginButton(false);
-    setIsLoggedIn(true);
-  };
-
-  const onCreateAdminSuccess = () => {
-    setShowCreateAdmin(false);
-    setShowLoginButton(false);
-    setIsLoggedIn(true);
-  };
-
-  const onAddEmployeeSuccess = () => {
-    setShowAddEmployee(false);
-    showMessageToUser('Employee added', 'info');
-  };
-
-  const onCloseOverlay = () => {
-    setShowLogin(false);
-    setShowCreateAdmin(false);
-    setShowAddEmployee(false);
-  };
-
-  const refreshRecords = () => {
-    fetch('/get-records', { 
-      method: 'POST',
-      credentials: 'include'
-    })
-      .then((response) => response.json())
-      .then((records) => setTimeCardRecords(records))
-      .catch((error) => console.error('Error refreshing records:', error));
-  };
-
-  // Get smart buttons based on current employee status
-  const getSmartButtons = () => {
-    const currentStatus = employeeStatus[pin];
-
-    // Not clocked in - show Clock In button inside PIN card
-    if (!currentStatus || currentStatus === 'clockOut' || currentStatus === 'absent') {
-      return null; // Button will be in PIN card
-    }
-
-    // On a specific break/activity - show only the corresponding "End" button in PIN card
-    if (currentStatus === 'startBreak' || 
-        currentStatus === 'startRestroom' || 
-        currentStatus === 'startLunch' || 
-        currentStatus === 'startItIssue' || 
-        currentStatus === 'startMeeting') {
-      return null; // Button will be in PIN card
-    }
-
-    // Clocked in - show all available options in separate section
-    return (
-      <>
-        <button onClick={() => handleActionClick('clockOut')}>🔴 Clock Out</button>
-        <button onClick={() => handleActionClick('startBreak')}>☕ Start Break</button>
-        <button onClick={() => handleActionClick('startLunch')}>🍔 Start Lunch</button>
-        <button onClick={() => handleActionClick('startRestroom')}>🚻 Restroom</button>
-        <button onClick={() => handleActionClick('startItIssue')}>💻 IT Issue</button>
-        <button onClick={() => handleActionClick('startMeeting')}>📊 Meeting</button>
-      </>
-    );
-  };
-
-  // Get the single action button for PIN card
-  const getSingleActionButton = () => {
-    if (pin.length !== 4) return null;
-    
-    const currentStatus = employeeStatus[pin];
-
-    // Not clocked in
-    if (!currentStatus || currentStatus === 'clockOut' || currentStatus === 'absent') {
-      return (
-        <button 
-          onClick={() => handleActionClick('clockIn')}
-          style={{ 
-            width: '100%',
-            fontSize: '20px',
-            padding: '18px',
-            margin: '16px 0',
-            background: 'linear-gradient(135deg, #10b981, #059669)',
-            color: 'white',
-            border: 'none',
-            borderRadius: '12px',
-            cursor: 'pointer',
-            fontWeight: '600',
-            boxShadow: '0 4px 12px rgba(16, 185, 129, 0.3)',
-            transition: 'all 0.3s ease'
-          }}
-          onMouseOver={(e) => {
-            e.currentTarget.style.transform = 'translateY(-2px)';
-            e.currentTarget.style.boxShadow = '0 6px 16px rgba(16, 185, 129, 0.4)';
-          }}
-          onMouseOut={(e) => {
-            e.currentTarget.style.transform = 'translateY(0)';
-            e.currentTarget.style.boxShadow = '0 4px 12px rgba(16, 185, 129, 0.3)';
-          }}
-        >
-          ⚡ CLOCK IN
-        </button>
-      );
-    }
-
-    // On break - show End Break
-    if (currentStatus === 'startBreak') {
-      return (
-        <button 
-          onClick={() => handleActionClick('endBreak')}
-          style={{ 
-            width: '100%',
-            fontSize: '20px',
-            padding: '18px',
-            margin: '16px 0',
-            background: 'linear-gradient(135deg, #10b981, #059669)',
-            color: 'white',
-            border: 'none',
-            borderRadius: '12px',
-            cursor: 'pointer',
-            fontWeight: '600',
-            boxShadow: '0 4px 12px rgba(16, 185, 129, 0.3)'
-          }}
-        >
-          ✅ End Break
-        </button>
-      );
-    }
-
-    // On restroom
-    if (currentStatus === 'startRestroom') {
-      return (
-        <button 
-          onClick={() => handleActionClick('endRestroom')}
-          style={{ 
-            width: '100%',
-            fontSize: '20px',
-            padding: '18px',
-            margin: '16px 0',
-            background: 'linear-gradient(135deg, #10b981, #059669)',
-            color: 'white',
-            border: 'none',
-            borderRadius: '12px',
-            cursor: 'pointer',
-            fontWeight: '600',
-            boxShadow: '0 4px 12px rgba(16, 185, 129, 0.3)'
-          }}
-        >
-          ✅ End Restroom
-        </button>
-      );
-    }
-
-    // On lunch
-    if (currentStatus === 'startLunch') {
-      return (
-        <button 
-          onClick={() => handleActionClick('endLunch')}
-          style={{ 
-            width: '100%',
-            fontSize: '20px',
-            padding: '18px',
-            margin: '16px 0',
-            background: 'linear-gradient(135deg, #10b981, #059669)',
-            color: 'white',
-            border: 'none',
-            borderRadius: '12px',
-            cursor: 'pointer',
-            fontWeight: '600',
-            boxShadow: '0 4px 12px rgba(16, 185, 129, 0.3)'
-          }}
-        >
-          ✅ End Lunch
-        </button>
-      );
-    }
-
-    // IT Issue
-    if (currentStatus === 'startItIssue') {
-      return (
-        <button 
-          onClick={() => handleActionClick('endItIssue')}
-          style={{ 
-            width: '100%',
-            fontSize: '20px',
-            padding: '18px',
-            margin: '16px 0',
-            background: 'linear-gradient(135deg, #10b981, #059669)',
-            color: 'white',
-            border: 'none',
-            borderRadius: '12px',
-            cursor: 'pointer',
-            fontWeight: '600',
-            boxShadow: '0 4px 12px rgba(16, 185, 129, 0.3)'
-          }}
-        >
-          ✅ End IT Issue
-        </button>
-      );
-    }
-
-    // Meeting
-    if (currentStatus === 'startMeeting') {
-      return (
-        <button 
-          onClick={() => handleActionClick('endMeeting')}
-          style={{ 
-            width: '100%',
-            fontSize: '20px',
-            padding: '18px',
-            margin: '16px 0',
-            background: 'linear-gradient(135deg, #10b981, #059669)',
-            color: 'white',
-            border: 'none',
-            borderRadius: '12px',
-            cursor: 'pointer',
-            fontWeight: '600',
-            boxShadow: '0 4px 12px rgba(16, 185, 129, 0.3)'
-          }}
-        >
-          ✅ End Meeting
-        </button>
-      );
-    }
-
-    return null;
+    setNeedsSetup(false);
+    setAuth('in');
+    setView('admin');
   };
 
   return (
-    <div className="time-clock-container" ref={timeClockContainerRef} onKeyDown={handleKeyDown} tabIndex={0}>
-      <Login showLogin={showLogin} onLoginSuccess={onLoginSuccess} onCloseOverlay={onCloseOverlay} />
-      {showAddEmployee && isLoggedIn && <AddEmployee onAddSuccess={onAddEmployeeSuccess} onCloseOverlay={onCloseOverlay} />}
-      {showCreateAdmin && !isLoggedIn && <CreateAdmin onCreateSuccess={onCreateAdminSuccess} onCloseOverlay={onCloseOverlay} />}
-      
-      {/* PWA Install Prompt - Only show for non-admin users */}
-      {!isLoggedIn && <PWAInstaller />}
-      
-      <div className="logo-container">
-        <img src="https://storage.googleapis.com/msgsndr/7AsSgaSl1IdPndNHqKfs/media/68e6dc19c4bd9e7a6d37de2b.png" alt="PowerHouze Group Logo" />
-      </div>
-      <h1>Employee Time Clock</h1>
-      <div id="currentTime">{currentTime}</div>
-      
-      <div className="pin-entry">
-        <div id="currentPin">Enter PIN: {pin || '____'}</div>
-        
-        {/* Remember PIN checkbox */}
-        {pin.length === 4 && (
-          <div style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            gap: '8px',
-            margin: '12px 0',
-            fontSize: '14px',
-            color: '#374151'
-          }}>
-            <input
-              type="checkbox"
-              id="rememberPin"
-              checked={rememberPin}
-              onChange={(e) => {
-                setRememberPin(e.target.checked);
-                if (e.target.checked) {
-                  localStorage.setItem('rememberedPin', pin);
-                } else {
-                  localStorage.removeItem('rememberedPin');
-                }
-              }}
-              style={{
-                width: '18px',
-                height: '18px',
-                cursor: 'pointer'
-              }}
-            />
-            <label 
-              htmlFor="rememberPin" 
-              style={{ 
-                cursor: 'pointer',
-                fontWeight: '600',
-                userSelect: 'none'
-              }}
-            >
-              Remember PIN on this device
-            </label>
-          </div>
-        )}
-
-        {/* Single action button (when applicable) */}
-        {getSingleActionButton()}
-        
-        <button className="clear-button" onClick={handleClear}>Clear PIN</button>
-      </div>
-
-      {/* Show current status if PIN is entered and employee has a status */}
-      {pin.length === 4 && employeeStatus[pin] && (
-        <div style={{
-          textAlign: 'center',
-          margin: '16px auto',
-          padding: '12px 24px',
-          background: 'rgba(255, 255, 255, 0.15)',
-          borderRadius: '12px',
-          color: 'white',
-          fontSize: '16px',
-          fontWeight: '600',
-          maxWidth: '600px',
-          backdropFilter: 'blur(10px)'
-        }}>
-          {(() => {
-            const display = formatStatusDisplay(employeeStatus[pin]);
-            return (
-              <>
-                {display.emoji} Current Status: <span style={{ fontWeight: '700' }}>
-                  {display.text}
-                </span>
-              </>
-            );
-          })()}
-        </div>
-      )}
-
-      <div id="message-container"></div>
-      <div className="main-container">
-        <Keypad onKeyPress={handleKeyPress} />
-        {/* Only show action buttons container when there are multiple buttons */}
-        {getSmartButtons() && (
-          <div className="action-buttons">
-            {getSmartButtons()}
-          </div>
-        )}
-      </div>
-      
-      {/* Dashboard Stats - Show below action buttons when logged in */}
-      {isLoggedIn && <DashboardStats records={timeCardRecords} employeeStatus={employeeStatus} />}
-      {showLoginButton && !isLoggedIn && <button id="loginButton" onClick={() => setShowLogin(true)}>
-        🔓 Admin Login</button>}
-      {isLoggedIn && <hr></hr>}
-      
-      {/* Admin Tabs - Contains all admin sections */}
-      {isLoggedIn && (
-        <AdminTabs 
-          records={timeCardRecords}
-          showMessageToUser={showMessageToUser}
-          onRecordsUpdate={refreshRecords}
-          onAddEmployeeSuccess={onAddEmployeeSuccess}
-          employeeStatus={employeeStatus}
+    <>
+      {inAdmin ? (
+        <AdminPortal
+          theme={theme}
+          onThemeChange={setTheme}
+          onOpenKiosk={() => setView('kiosk')}
+          onLogout={logout}
+          showMessage={showMessage}
+        />
+      ) : (
+        <Kiosk
+          theme={theme}
+          isAdmin={auth === 'in'}
+          onOpenAdmin={() => (auth === 'in' ? setView('admin') : setShowLogin(true))}
+          showMessage={showMessage}
         />
       )}
-      
-      {/* Keep Add Employee popup button for quick access */}
-      {!isOverlayShowing && isLoggedIn && <button id="addEmployeeButton" onClick={() => { setShowAddEmployee(true) }}>➕ Add Employee</button>}
-      {!isOverlayShowing && isLoggedIn && <button id="logoutButton" onClick={() => { fetch('/logout', { method: 'POST' }).finally(() => window.location.reload()); }}>🚪 Logout</button>}
-    </div>
+
+      <Login showLogin={showLogin} onLoginSuccess={onLoginSuccess} onCloseOverlay={() => setShowLogin(false)} />
+      {needsSetup && auth === 'out' && (
+        <CreateAdmin onCreateSuccess={onLoginSuccess} onCloseOverlay={() => setNeedsSetup(false)} />
+      )}
+      <div id="message-container" aria-live="polite" />
+    </>
   );
 };
 
