@@ -114,6 +114,106 @@ async function getLastRecord(db, pin) {
     return db.collection('records').findOne({ pin }, { sort: { _id: -1 } });
 }
 
+// ---------- Time sheet helpers ----------
+// Records store time as a PST wall-clock string: "MM/DD/YYYY, hh:mm:ss AM"
+
+const LATE_AFTER_MINUTES = 7 * 60 + 10; // clock-ins after 7:10 AM PST are late
+const BREAK_TYPES = { StartBreak: 'break', StartLunch: 'lunch', StartRestroom: 'restroom', StartMeeting: 'meeting', StartItIssue: 'itIssue' };
+
+function parseRecordTime(str) {
+    const m = /^(\d{1,2})\/(\d{1,2})\/(\d{4}),?\s+(\d{1,2}):(\d{2})(?::(\d{2}))?\s*([AP]M)/i.exec(str || '');
+    if (!m) return null;
+    let hour = parseInt(m[4], 10) % 12;
+    if (m[7].toUpperCase() === 'PM') hour += 12;
+    return {
+        dateKey: `${m[1].padStart(2, '0')}/${m[2].padStart(2, '0')}/${m[3]}`,
+        minutes: hour * 60 + parseInt(m[5], 10) + (parseInt(m[6] || '0', 10) / 60)
+    };
+}
+
+// 'YYYY-MM-DD' -> 'MM/DD/YYYY'
+function isoToDateKey(iso) {
+    const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso || '');
+    return m ? `${m[2]}/${m[3]}/${m[1]}` : null;
+}
+
+function dateKeysInRange(startIso, endIso) {
+    const start = new Date(`${startIso}T12:00:00Z`);
+    const end = new Date(`${endIso}T12:00:00Z`);
+    if (isNaN(start) || isNaN(end) || end < start) return null;
+    const keys = [];
+    for (let d = start; d <= end && keys.length <= 93; d = new Date(d.getTime() + 86400000)) {
+        keys.push(isoToDateKey(d.toISOString().slice(0, 10)));
+    }
+    return keys.length > 93 ? null : keys;
+}
+
+function dateKeyRegex(dateKey) {
+    return new RegExp('^' + dateKey.replace(/\//g, '\\/'));
+}
+
+// Totals for one employee's records on one day (records in insertion order).
+// endMinutes: "now" for today, so open segments count up to the current time.
+function summarizeDay(events, endMinutes) {
+    const totals = { worked: 0, break: 0, lunch: 0, restroom: 0, meeting: 0, itIssue: 0 };
+    let workStart = null, pauseStart = null, pauseType = null;
+    let firstIn = null, lastOut = null, absent = false, lastMinutes = null;
+
+    for (const e of events) {
+        const t = parseRecordTime(e.time);
+        if (!t) continue;
+        const min = t.minutes;
+        lastMinutes = min;
+        if (e.action === 'Absent') { absent = true; continue; }
+        if (e.action === 'ClockIn') {
+            if (firstIn === null) firstIn = min;
+            workStart = min;
+        } else if (BREAK_TYPES[e.action]) {
+            if (workStart !== null) totals.worked += min - workStart;
+            workStart = null;
+            pauseStart = min;
+            pauseType = BREAK_TYPES[e.action];
+        } else if (e.action.startsWith('End')) {
+            if (pauseStart !== null) totals[pauseType] += min - pauseStart;
+            pauseStart = null;
+            workStart = min;
+        } else if (e.action === 'ClockOut') {
+            if (workStart !== null) totals.worked += min - workStart;
+            if (pauseStart !== null) totals[pauseType] += min - pauseStart;
+            workStart = null;
+            pauseStart = null;
+            lastOut = min;
+        }
+    }
+
+    // Still open at the end of the day / now
+    const end = endMinutes !== null ? endMinutes : lastMinutes;
+    if (workStart !== null && end !== null) totals.worked += Math.max(0, end - workStart);
+    if (pauseStart !== null && end !== null) totals[pauseType] += Math.max(0, end - pauseStart);
+
+    // Meetings and IT issues are still paid, on-the-clock time
+    totals.worked += totals.meeting + totals.itIssue;
+    for (const k of Object.keys(totals)) totals[k] = Math.round(totals[k]);
+    return {
+        firstIn: firstIn !== null ? Math.round(firstIn) : null,
+        lastOut: lastOut !== null ? Math.round(lastOut) : null,
+        late: firstIn !== null && firstIn > LATE_AFTER_MINUTES,
+        absent,
+        openAtEnd: workStart !== null || pauseStart !== null,
+        totals
+    };
+}
+
+function groupByPin(records) {
+    const byPin = {};
+    for (const r of records) (byPin[r.pin] = byPin[r.pin] || []).push(r);
+    return byPin;
+}
+
+function publicRecord(r) {
+    return { name: r.name, pin: r.pin, action: r.action, time: r.time, admin_action: !!r.admin_action, note: r.note || undefined };
+}
+
 // Helper function to get current PST time as formatted string
 function getPSTTime() {
     // Format: MM/DD/YYYY, HH:MM:SS AM/PM. Formatting with timeZone directly
@@ -367,7 +467,16 @@ app.post('/employee-status', async (req, res) => {
         }
 
         const lastRecord = await getLastRecord(db, pin);
-        res.json({ name: user.name, action: lastRecord ? lastRecord.action : null });
+        const now = parseRecordTime(getPSTTime());
+        const todays = await db.collection('records')
+            .find({ pin, time: dateKeyRegex(now.dateKey) }).sort({ _id: 1 }).toArray();
+        const day = summarizeDay(todays, now.minutes);
+        res.json({
+            name: user.name,
+            action: lastRecord ? lastRecord.action : null,
+            time: lastRecord ? lastRecord.time : null,
+            today: { firstIn: day.firstIn, worked: day.totals.worked, late: day.late }
+        });
     } catch (error) {
         res.status(500).json({ error: error.message });
     }
@@ -379,23 +488,18 @@ app.post('/download-records', requireAdmin, async (req, res) => {
         const db = getDB();
         const { startDate, endDate } = req.query;
         
-        // Build query filter
+        // Build query filter. Times are stored as "MM/DD/YYYY, ..." strings, so match
+        // each day in the range by prefix (string comparison breaks across years).
         let query = {};
         if (startDate || endDate) {
-            query = { time: {} };
-            if (startDate) {
-                const start = new Date(startDate);
-                start.setHours(0, 0, 0, 0);
-                query.time.$gte = start.toLocaleString('en-US', { timeZone: 'America/Los_Angeles' });
+            const keys = dateKeysInRange(startDate || endDate, endDate || startDate);
+            if (!keys) {
+                return res.status(400).json({ error: 'Invalid date range (max 93 days)' });
             }
-            if (endDate) {
-                const end = new Date(endDate);
-                end.setHours(23, 59, 59, 999);
-                query.time.$lte = end.toLocaleString('en-US', { timeZone: 'America/Los_Angeles' });
-            }
+            query = { time: { $in: keys.map(dateKeyRegex) } };
         }
-        
-        const records = await db.collection('records').find(query).toArray();
+
+        const records = await db.collection('records').find(query).sort({ _id: 1 }).toArray();
         const fields = ['name', 'pin', 'action', 'time', 'ip', 'admin_action', 'note'];
         const opts = { fields };
         const csv = json2csv(records, opts);
@@ -853,6 +957,145 @@ app.post('/test-auto-clockout', requireAdmin, async (req, res) => {
         res.json({ success: true, message: `Auto clock-out test completed (${count} clocked out)` });
     } catch (error) {
         console.error('Test auto clock-out error:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// ---------- Settings (holiday theme) ----------
+const THEMES = ['default', 'halloween'];
+
+app.get('/settings', async (req, res) => {
+    try {
+        const doc = await getDB().collection('settings').findOne({ _id: 'app' });
+        res.json({ theme: doc?.theme || 'default', themes: THEMES });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+app.post('/settings', requireAdmin, async (req, res) => {
+    const { theme } = req.body;
+    if (!THEMES.includes(theme)) {
+        return res.status(400).json({ error: 'Unknown theme' });
+    }
+    try {
+        await getDB().collection('settings').updateOne({ _id: 'app' }, { $set: { theme } }, { upsert: true });
+        res.json({ theme });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// ---------- Admin reports ----------
+
+// One day's summary for every active employee (plus anyone inactive who has
+// records that day). endMinutes is "now" when dateKey is today.
+async function buildDay(db, dateKey, endMinutes) {
+    const [employees, records] = await Promise.all([
+        db.collection('users').find({ username: { $exists: false } }, { projection: { name: 1, pin: 1, tags: 1, active: 1 } }).toArray(),
+        db.collection('records').find({ time: dateKeyRegex(dateKey) }).sort({ _id: 1 }).toArray()
+    ]);
+    const byPin = groupByPin(records);
+    const rows = employees
+        .filter(e => e.active !== false || byPin[e.pin])
+        .map(e => ({
+            name: e.name,
+            pin: e.pin,
+            tags: e.tags || [],
+            active: e.active !== false,
+            ...summarizeDay(byPin[e.pin] || [], endMinutes),
+            events: (byPin[e.pin] || []).map(publicRecord)
+        }));
+    return { rows, records };
+}
+
+// Live view for the admin "Today" screen
+app.get('/admin/overview', requireAdmin, async (req, res) => {
+    try {
+        const db = getDB();
+        const now = getPSTTime();
+        const nowParsed = parseRecordTime(now);
+        const { rows, records } = await buildDay(db, nowParsed.dateKey, nowParsed.minutes);
+
+        // Current status comes from each employee's latest record (may be from an earlier day)
+        const latest = await Promise.all(rows.map(r => getLastRecord(db, r.pin)));
+        rows.forEach((r, i) => {
+            const last = latest[i];
+            const parsed = last ? parseRecordTime(last.time) : null;
+            r.lastAction = last ? last.action : null;
+            r.lastTime = last ? last.time : null;
+            r.sinceMinutes = parsed && parsed.dateKey === nowParsed.dateKey ? Math.round(parsed.minutes) : null;
+            r.staleOpen = !!(last && parsed && parsed.dateKey !== nowParsed.dateKey && last.action !== 'ClockOut' && last.action !== 'Absent');
+            delete r.events;
+        });
+
+        res.json({
+            now,
+            nowMinutes: Math.round(nowParsed.minutes),
+            lateAfterMinutes: LATE_AFTER_MINUTES,
+            autoClockOut: AUTO_CLOCKOUT_ENABLED ? AUTO_CLOCKOUT_HOUR * 60 + AUTO_CLOCKOUT_MINUTE : null,
+            employees: rows.filter(r => r.active),
+            activity: records.slice(-40).reverse().map(publicRecord)
+        });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Timesheet for one day: ?date=YYYY-MM-DD
+app.get('/admin/day', requireAdmin, async (req, res) => {
+    const dateKey = isoToDateKey(req.query.date);
+    if (!dateKey) return res.status(400).json({ error: 'date must be YYYY-MM-DD' });
+    try {
+        const nowParsed = parseRecordTime(getPSTTime());
+        const endMinutes = dateKey === nowParsed.dateKey ? nowParsed.minutes : null;
+        const { rows } = await buildDay(getDB(), dateKey, endMinutes);
+        res.json({ date: dateKey, employees: rows });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Hours per employee over a date range: ?start=YYYY-MM-DD&end=YYYY-MM-DD
+app.get('/admin/hours', requireAdmin, async (req, res) => {
+    const keys = dateKeysInRange(req.query.start, req.query.end);
+    if (!keys) return res.status(400).json({ error: 'Invalid date range (max 93 days)' });
+    try {
+        const db = getDB();
+        const nowParsed = parseRecordTime(getPSTTime());
+        const [employees, records] = await Promise.all([
+            db.collection('users').find({ username: { $exists: false } }, { projection: { name: 1, pin: 1, tags: 1, active: 1 } }).toArray(),
+            db.collection('records').find({ time: { $in: keys.map(dateKeyRegex) } }).sort({ _id: 1 }).toArray()
+        ]);
+
+        const byPinDay = {};
+        for (const r of records) {
+            const t = parseRecordTime(r.time);
+            if (!t) continue;
+            const k = r.pin + '|' + t.dateKey;
+            (byPinDay[k] = byPinDay[k] || []).push(r);
+        }
+
+        const rows = employees.map(e => {
+            const row = { name: e.name, pin: e.pin, tags: e.tags || [], active: e.active !== false,
+                daysWorked: 0, workedMinutes: 0, breakMinutes: 0, lunchMinutes: 0, lateDays: 0, absentDays: 0, missingClockOuts: 0 };
+            for (const key of keys) {
+                const events = byPinDay[e.pin + '|' + key];
+                if (!events) continue;
+                const day = summarizeDay(events, key === nowParsed.dateKey ? nowParsed.minutes : null);
+                if (day.absent) row.absentDays++;
+                if (day.firstIn !== null) row.daysWorked++;
+                if (day.late) row.lateDays++;
+                if (day.openAtEnd && key !== nowParsed.dateKey) row.missingClockOuts++;
+                row.workedMinutes += day.totals.worked;
+                row.breakMinutes += day.totals.break + day.totals.restroom;
+                row.lunchMinutes += day.totals.lunch;
+            }
+            return row;
+        }).filter(r => r.active || r.daysWorked || r.absentDays);
+
+        res.json({ start: keys[0], end: keys[keys.length - 1], days: keys.length, employees: rows });
+    } catch (error) {
         res.status(500).json({ error: error.message });
     }
 });
