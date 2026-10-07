@@ -362,6 +362,9 @@ app.post('/employee-status', async (req, res) => {
         if (!user || user.username) {
             return res.status(404).json({ error: 'No user with this PIN' });
         }
+        if (user.active === false) {
+            return res.status(403).json({ error: 'This PIN is inactive. Please contact your team lead.', inactive: true });
+        }
 
         const lastRecord = await getLastRecord(db, pin);
         res.json({ name: user.name, action: lastRecord ? lastRecord.action : null });
@@ -418,6 +421,9 @@ app.post('/add-record', async (req, res) => {
         
         if (!user || user.username) {
             return res.status(400).json({ error: 'No user with this PIN' });
+        }
+        if (user.active === false) {
+            return res.status(403).json({ error: 'This PIN is inactive. Please contact your team lead.' });
         }
 
         // Validate against the latest stored record so two devices can't
@@ -598,7 +604,7 @@ app.post('/quick-admin-login', async (req, res) => {
         // Find employee by PIN
         const employee = await db.collection('users').findOne({ pin });
         
-        if (!employee) {
+        if (!employee || employee.active === false) {
             return res.status(401).json({ error: 'Invalid PIN' });
         }
         
@@ -809,6 +815,32 @@ app.post('/update-employee-tags', requireAdmin, async (req, res) => {
         });
     } catch (error) {
         console.error('Update tags error:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Activate / deactivate an employee - ADMIN ONLY. Inactive employees keep their
+// PIN and history but can't clock in and are hidden from dashboards.
+app.post('/set-employee-active', requireAdmin, async (req, res) => {
+    const { pin, active } = req.body;
+
+    if (typeof active !== 'boolean') {
+        return res.status(400).json({ error: 'active must be true or false' });
+    }
+
+    try {
+        const db = getDB();
+        const result = await db.collection('users').updateOne(
+            { pin, username: { $exists: false } },
+            { $set: { active } }
+        );
+
+        if (result.matchedCount === 0) {
+            return res.status(404).json({ error: 'Employee not found' });
+        }
+
+        res.json({ success: true, active });
+    } catch (error) {
         res.status(500).json({ error: error.message });
     }
 });

@@ -23,7 +23,7 @@ const MarkAbsent: React.FC<MarkAbsentProps> = ({ showMessageToUser, onMarkAbsent
       .then((users) => {
         // Filter out admin users (those with username field)
         const employeeList = users
-          .filter((user: any) => !user.username && user.pin && user.name)
+          .filter((user: any) => !user.username && user.pin && user.name && user.active !== false)
           .map((user: any) => ({ name: user.name, pin: user.pin }))
           .sort((a: Employee, b: Employee) => a.name.localeCompare(b.name));
         setEmployees(employeeList);

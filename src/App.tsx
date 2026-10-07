@@ -140,7 +140,14 @@ const App: React.FC = () => {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ pin })
     })
-      .then((response) => (response.ok ? response.json() : null))
+      .then(async (response) => {
+        if (response.status === 403) {
+          const data = await response.json();
+          if (!cancelled) showMessageToUser(data.error, 'error');
+          return null;
+        }
+        return response.ok ? response.json() : null;
+      })
       .then((data) => {
         if (cancelled || !data) return;
         const status = data.action ? data.action.charAt(0).toLowerCase() + data.action.slice(1) : undefined;

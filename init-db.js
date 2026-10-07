@@ -7,6 +7,23 @@ const DB_NAME = 'timeclock';
 let client;
 let db;
 
+// Unique PINs for employees only. The original index also covered admin
+// accounts (which have no PIN), so creating a second admin failed with a
+// duplicate-key error. Replace it with a partial index once.
+async function ensurePinIndex(db) {
+  const users = db.collection('users');
+  const indexes = await users.indexes();
+  const existing = indexes.find((i) => i.name === 'pin_1');
+  if (existing && !existing.partialFilterExpression) {
+    await users.dropIndex('pin_1');
+    console.log('Replacing users.pin index with a partial unique index');
+  }
+  await users.createIndex(
+    { pin: 1 },
+    { unique: true, partialFilterExpression: { pin: { $type: 'string' } } }
+  );
+}
+
 async function connectDB() {
   try {
     if (db) {
@@ -22,7 +39,7 @@ async function connectDB() {
     console.log('✅ Connected to MongoDB successfully!');
     
     // Create indexes for better performance
-    await db.collection('users').createIndex({ pin: 1 }, { unique: true });
+    await ensurePinIndex(db);
     await db.collection('users').createIndex({ username: 1 }, { unique: true, sparse: true });
     await db.collection('records').createIndex({ pin: 1 });
     await db.collection('records').createIndex({ time: -1 });

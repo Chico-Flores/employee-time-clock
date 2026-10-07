@@ -3,6 +3,7 @@ import React, { useState, useEffect } from 'react';
 interface Employee {
   name: string;
   pin: string;
+  active: boolean;
   _id?: string;
 }
 
@@ -16,6 +17,8 @@ const ManageEmployees: React.FC<ManageEmployeesProps> = ({ showMessageToUser, on
   const [loading, setLoading] = useState(true);
   const [deleting, setDeleting] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
+  const [showInactive, setShowInactive] = useState(false);
+  const [toggling, setToggling] = useState<string | null>(null);
 
   useEffect(() => {
     fetchEmployees();
@@ -32,6 +35,7 @@ const ManageEmployees: React.FC<ManageEmployeesProps> = ({ showMessageToUser, on
           .map((user: any) => ({ 
             name: user.name, 
             pin: user.pin,
+            active: user.active !== false,
             _id: user._id 
           }))
           .sort((a: Employee, b: Employee) => a.name.localeCompare(b.name));
@@ -93,9 +97,39 @@ const ManageEmployees: React.FC<ManageEmployeesProps> = ({ showMessageToUser, on
     }
   };
 
+  const handleToggleActive = async (employee: Employee) => {
+    const active = !employee.active;
+    if (!active && !window.confirm(
+      `Deactivate ${employee.name}?\n\nThey won't be able to clock in and will be hidden from the dashboard. ` +
+      `Their time card history is kept, and you can reactivate them at any time.`
+    )) {
+      return;
+    }
+
+    setToggling(employee.pin);
+    try {
+      const response = await fetch('/set-employee-active', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ pin: employee.pin, active })
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || 'Update failed');
+
+      setEmployees(employees.map(e => e.pin === employee.pin ? { ...e, active } : e));
+      showMessageToUser(`${employee.name} ${active ? 'reactivated' : 'deactivated'}`, 'success');
+    } catch (error: any) {
+      showMessageToUser(`Error: ${error.message}`, 'error');
+    } finally {
+      setToggling(null);
+    }
+  };
+
+  const inactiveCount = employees.filter(emp => !emp.active).length;
   const filteredEmployees = employees.filter(emp => 
-    emp.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    emp.pin.includes(searchTerm)
+    (showInactive || emp.active) &&
+    (emp.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    emp.pin.includes(searchTerm))
   );
 
   if (loading) {
@@ -128,7 +162,7 @@ const ManageEmployees: React.FC<ManageEmployeesProps> = ({ showMessageToUser, on
     }}>
       <h2 style={{ color: '#1e3a8a', marginBottom: '10px', fontSize: '1.8rem' }}>👥 Manage Employees</h2>
       <p style={{ color: '#666', marginBottom: '30px' }}>
-        View and remove employees from the system. Historical records will be preserved.
+        Deactivate employees who have left (reversible), or delete them permanently. Historical records are always preserved.
       </p>
 
       {/* Search Bar */}
@@ -150,6 +184,15 @@ const ManageEmployees: React.FC<ManageEmployeesProps> = ({ showMessageToUser, on
           onFocus={(e) => e.target.style.borderColor = '#2563eb'}
           onBlur={(e) => e.target.style.borderColor = '#e5e7eb'}
         />
+        <label style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', marginLeft: '16px', color: '#374151', fontWeight: 600, cursor: 'pointer' }}>
+          <input
+            type="checkbox"
+            checked={showInactive}
+            onChange={(e) => setShowInactive(e.target.checked)}
+            style={{ width: '18px', height: '18px' }}
+          />
+          Show inactive ({inactiveCount})
+        </label>
       </div>
 
       {filteredEmployees.length === 0 ? (
@@ -184,6 +227,7 @@ const ManageEmployees: React.FC<ManageEmployeesProps> = ({ showMessageToUser, on
           }}>
             {filteredEmployees.map((employee) => (
               <div key={employee.pin} style={{
+                opacity: employee.active ? 1 : 0.6,
                 border: '2px solid #e5e7eb',
                 borderRadius: '16px',
                 padding: '24px',
@@ -223,7 +267,40 @@ const ManageEmployees: React.FC<ManageEmployeesProps> = ({ showMessageToUser, on
                   }}>
                     PIN: {employee.pin}
                   </div>
+                  {!employee.active && (
+                    <span style={{
+                      marginLeft: '8px',
+                      background: '#f3f4f6',
+                      color: '#6b7280',
+                      padding: '6px 14px',
+                      borderRadius: '20px',
+                      fontSize: '13px',
+                      fontWeight: '700'
+                    }}>
+                      INACTIVE
+                    </span>
+                  )}
                 </div>
+
+                <button
+                  onClick={() => handleToggleActive(employee)}
+                  disabled={toggling === employee.pin}
+                  style={{
+                    width: '100%',
+                    marginBottom: '10px',
+                    background: employee.active ? '#f59e0b' : '#10b981',
+                    color: 'white',
+                    padding: '12px',
+                    border: 'none',
+                    borderRadius: '10px',
+                    cursor: toggling === employee.pin ? 'not-allowed' : 'pointer',
+                    fontSize: '15px',
+                    fontWeight: '700',
+                    opacity: toggling === employee.pin ? 0.6 : 1
+                  }}
+                >
+                  {toggling === employee.pin ? '⏳ Saving...' : employee.active ? '⏸️ Deactivate' : '▶️ Reactivate'}
+                </button>
 
                 {/* Delete Button */}
                 <button
@@ -278,6 +355,7 @@ const ManageEmployees: React.FC<ManageEmployeesProps> = ({ showMessageToUser, on
           ⚠️ Important Information
         </h4>
         <ul style={{ margin: 0, paddingLeft: '20px', color: '#991b1b', lineHeight: '1.8', fontSize: '14px' }}>
+          <li>Prefer Deactivate for agents who left - it's reversible and keeps them off the dashboard</li>
           <li>Deleting an employee removes their ability to clock in/out</li>
           <li>All historical time card records are preserved for payroll</li>
           <li>This action cannot be undone - you'll need to re-add the employee</li>

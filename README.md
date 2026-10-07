@@ -24,8 +24,8 @@ A simple web-based employee time clock application built with React.
 3. **Start the Application** (Development)
 
    ```bash
-   # serves application to port 3001
-   npm start
+   # builds the frontend and serves the app on port 3001
+   npm run dev
    ```
 
 4. **Build the Application** (Production)
@@ -48,12 +48,11 @@ Set these on the hosting service (Render → service → Environment). Never com
 | `CRON_SECRET` | for auto clock-out | Shared secret for the scheduled auto clock-out job |
 | `AUTO_CLOCKOUT_ENABLED` / `AUTO_CLOCKOUT_HOUR` / `AUTO_CLOCKOUT_MINUTE` | optional | Defaults: enabled, 16:30 PST |
 
-### Scheduled auto clock-out
+### Auto clock-out
 
-On Render's free tier the server sleeps when idle, so the in-process 4:30 PM timer can miss.
-`.github/workflows/auto-clockout.yml` calls `POST /cron/auto-clockout` daily instead.
-Add two repository secrets (GitHub → Settings → Secrets and variables → Actions):
-`TIMECLOCK_URL` (the app's public URL) and `CRON_SECRET` (same value as on Render).
+The server clocks everyone out at 4:30 PM PST (needs an always-on instance).
+`POST /cron/auto-clockout` with header `x-cron-secret: $CRON_SECRET` triggers the same
+clock-out from an external scheduler if the server ever runs on a plan that sleeps.
 
 ## Usage
 

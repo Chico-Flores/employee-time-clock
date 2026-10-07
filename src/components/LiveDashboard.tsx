@@ -53,7 +53,7 @@ const LiveDashboard: React.FC<LiveDashboardProps> = ({ records, employeeStatus }
       const response = await fetch('/get-users', { method: 'POST' });
       const users = await response.json();
       const employeeList = users
-        .filter((user: any) => !user.username && user.pin && user.name)
+        .filter((user: any) => !user.username && user.pin && user.name && user.active !== false)
         .map((user: any) => ({ 
           name: user.name, 
           pin: user.pin,
