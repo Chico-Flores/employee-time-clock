@@ -101,7 +101,7 @@ const SettingsView: React.FC<SettingsViewProps> = ({ theme, onThemeChange, showM
         <section className="card">
           <div className="card-head"><h2>Auto clock-out</h2></div>
           <p>Everyone still on the clock is clocked out automatically at <strong>4:30 PM Pacific</strong> every day, with a note in Discord.</p>
-          <p className="muted small">Clock-in is open 6:15 AM – 4:00 PM Pacific. Clock-ins after 7:10 AM are marked late.</p>
+          <p className="muted small">Clock-in is open 5:45 AM – 4:00 PM Pacific. Clock-ins after 7:10 AM are marked late.</p>
           <button className="btn btn-ghost" onClick={runAutoClockOut}>Run auto clock-out now</button>
         </section>
 
