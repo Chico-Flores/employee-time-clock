@@ -133,7 +133,8 @@ const Kiosk: React.FC<KioskProps> = ({ theme, siteTheme, themePref, onThemePrefC
   useEffect(() => {
     if (pin.length !== 4) {
       setEmployee(null);
-      setLookupState('idle');
+      // Keep the "not recognized" hint after a wrong PIN until they start retyping
+      setLookupState(prev => (prev === 'notFound' && pin.length === 0 ? prev : 'idle'));
       return;
     }
     let cancelled = false;
@@ -149,8 +150,12 @@ const Kiosk: React.FC<KioskProps> = ({ theme, siteTheme, themePref, onThemePrefC
         if (!response.ok) {
           setEmployee(null);
           setLookupState('notFound');
-          showMessage(response.status === 403 ? data.error : 'PIN not found. Please check and try again.', 'error');
+          showMessage(response.status === 404 ? 'PIN not found. Please try again.' : data.error, 'error');
           triggerShake();
+          // Clear the digits so they can retype from scratch, and forget a saved PIN that no longer works
+          setTimeout(() => { if (!cancelled) setPin(''); }, 600);
+          setRememberPin(false);
+          try { localStorage.removeItem('rememberedPin'); } catch { /* ignore */ }
           return;
         }
         const last = parseRecordTime(data.time);
@@ -434,7 +439,7 @@ const Kiosk: React.FC<KioskProps> = ({ theme, siteTheme, themePref, onThemePrefC
           </div>
 
           {lookupState === 'loading' && <div className="kiosk-hint">Looking you up…</div>}
-          {lookupState === 'notFound' && <div className="kiosk-hint kiosk-hint-error">PIN not recognized</div>}
+          {lookupState === 'notFound' && <div className="kiosk-hint kiosk-hint-error">PIN not recognized. Please type it again.</div>}
           {!employee && lookupState === 'idle' && (
             <div className="kiosk-hint">Type your 4-digit PIN on the keypad or keyboard</div>
           )}

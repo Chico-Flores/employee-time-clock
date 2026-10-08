@@ -1,4 +1,4 @@
-const CACHE_NAME = 'timeclock-v3';
+const CACHE_NAME = 'timeclock-v4';
 const urlsToCache = [
   '/',
   '/index.html',
