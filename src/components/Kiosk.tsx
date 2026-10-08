@@ -61,7 +61,7 @@ const SECONDARY_ACTIONS = [
   { action: 'StartItIssue', label: 'IT issue', icon: '💻' }
 ];
 
-const EARLIEST_CLOCK_IN = 6 * 60 + 15; // 6:15 AM PST
+const EARLIEST_CLOCK_IN = 5 * 60 + 45; // 5:45 AM PST
 const LATEST_CLOCK_IN = 16 * 60;       // 4:00 PM PST
 const LATE_AFTER = 7 * 60 + 10;        // 7:10 AM PST
 
@@ -273,7 +273,7 @@ const Kiosk: React.FC<KioskProps> = ({ theme, siteTheme, themePref, onThemePrefC
       const now = pstNow();
       const minutes = now.getHours() * 60 + now.getMinutes();
       if (minutes < EARLIEST_CLOCK_IN) {
-        showMessage('Clock-in opens at 6:15 AM Pacific.', 'error');
+        showMessage('Clock-in opens at 5:45 AM Pacific.', 'error');
         return;
       }
       if (minutes >= LATEST_CLOCK_IN) {
