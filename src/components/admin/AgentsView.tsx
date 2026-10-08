@@ -3,12 +3,15 @@ import Icon from './Icon';
 import { Avatar, LocationBadge, TagChips, Modal, EmptyState, ShowMessage, api, downloadCsv } from './ui';
 import { EMPLOYEE_TAG_OPTIONS } from '../../config/employeeTags';
 import { LOCATIONS, locationOf, roleOf } from '../../lib/time';
+import { prepareAvatar } from '../../lib/image';
 
 interface Agent {
   name: string;
   pin: string;
   tags: string[];
   active: boolean;
+  avatarUrl: string | null;
+  discordId: string | null;
 }
 
 const TAG_LABELS = EMPLOYEE_TAG_OPTIONS.map(t => t.label);
@@ -40,6 +43,8 @@ const AgentsView: React.FC<{ showMessage: ShowMessage; addRequested: number }> =
   const [revealed, setRevealed] = useState<string | null>(null);
   const [editing, setEditing] = useState<Agent | null>(null);
   const [editTags, setEditTags] = useState<string[]>([]);
+  const [editDiscord, setEditDiscord] = useState('');
+  const [photoBusy, setPhotoBusy] = useState(false);
   const [adding, setAdding] = useState(false);
   const [form, setForm] = useState({ name: '', pin: '', tags: [] as string[] });
   const [saving, setSaving] = useState(false);
@@ -47,7 +52,7 @@ const AgentsView: React.FC<{ showMessage: ShowMessage; addRequested: number }> =
   const load = () => api<any[]>('/get-users', { method: 'POST' })
     .then(users => setAgents(users
       .filter(u => !u.username && u.pin && u.name)
-      .map(u => ({ name: u.name, pin: u.pin, tags: u.tags || [], active: u.active !== false }))
+      .map(u => ({ name: u.name, pin: u.pin, tags: u.tags || [], active: u.active !== false, avatarUrl: u.avatarUrl || null, discordId: u.discordId || null }))
       .sort((a, b) => a.name.localeCompare(b.name))))
     .catch(e => showMessage(e.message, 'error'));
 
@@ -92,6 +97,9 @@ const AgentsView: React.FC<{ showMessage: ShowMessage; addRequested: number }> =
     setSaving(true);
     try {
       await api('/update-employee-tags', { method: 'POST', body: JSON.stringify({ pin: editing.pin, tags: editTags }) });
+      if ((editing.discordId || '') !== editDiscord.trim()) {
+        await api('/admin/agent-profile', { method: 'POST', body: JSON.stringify({ pin: editing.pin, discordId: editDiscord.trim() }) });
+      }
       showMessage(`Updated ${editing.name}`, 'success');
       setEditing(null);
       load();
@@ -99,6 +107,28 @@ const AgentsView: React.FC<{ showMessage: ShowMessage; addRequested: number }> =
       showMessage(e.message, 'error');
     } finally {
       setSaving(false);
+    }
+  };
+
+  const openEdit = (agent: Agent) => {
+    setEditing(agent);
+    setEditTags(agent.tags);
+    setEditDiscord(agent.discordId || '');
+  };
+
+  const changePhoto = async (file?: File, remove = false) => {
+    if (!editing || (!file && !remove)) return;
+    setPhotoBusy(true);
+    try {
+      const body = remove ? { pin: editing.pin, remove: true } : { pin: editing.pin, image: await prepareAvatar(file!) };
+      const { avatarUrl } = await api<{ avatarUrl: string | null }>('/admin/agent-avatar', { method: 'POST', body: JSON.stringify(body) });
+      setEditing({ ...editing, avatarUrl });
+      setAgents(list => (list || []).map(a => a.pin === editing.pin ? { ...a, avatarUrl } : a));
+      showMessage(remove ? 'Photo removed' : 'Photo updated', 'success');
+    } catch (e: any) {
+      showMessage(e.message, 'error');
+    } finally {
+      setPhotoBusy(false);
     }
   };
 
@@ -196,7 +226,7 @@ const AgentsView: React.FC<{ showMessage: ShowMessage; addRequested: number }> =
                   <tr key={a.pin} className={a.active ? '' : 'row-muted'}>
                     <td>
                       <div className="agent-cell">
-                        <Avatar name={a.name} tags={a.tags} />
+                        <Avatar name={a.name} tags={a.tags} url={a.avatarUrl} />
                         <div>
                           <div className="agent-name">{a.name}</div>
                           <div className="muted small">{roleOf(a.tags) || '—'}</div>
@@ -217,7 +247,7 @@ const AgentsView: React.FC<{ showMessage: ShowMessage; addRequested: number }> =
                       </label>
                     </td>
                     <td className="row-actions">
-                      <button className="icon-btn" title="Edit tags" onClick={() => { setEditing(a); setEditTags(a.tags); }}>
+                      <button className="icon-btn" title="Edit agent" onClick={() => openEdit(a)}>
                         <Icon name="edit" size={16} />
                       </button>
                     </td>
@@ -273,10 +303,31 @@ const AgentsView: React.FC<{ showMessage: ShowMessage; addRequested: number }> =
             <button className="btn btn-primary" disabled={saving} onClick={saveTags}>{saving ? 'Saving…' : 'Save'}</button>
           </>}
         >
+          <div className="photo-row">
+            <Avatar name={editing.name} tags={editing.tags} url={editing.avatarUrl} />
+            <div className="photo-row-actions">
+              <label className={`btn btn-ghost btn-sm ${photoBusy ? 'disabled' : ''}`}>
+                {editing.avatarUrl ? 'Change photo' : 'Upload photo'}
+                <input type="file" accept="image/*" hidden disabled={photoBusy} onChange={e => changePhoto(e.target.files?.[0])} />
+              </label>
+              {editing.avatarUrl && <button className="btn btn-ghost btn-sm" disabled={photoBusy} onClick={() => changePhoto(undefined, true)}>Remove</button>}
+              <span className="muted small">Agents can also add their own photo on the clock-in screen.</span>
+            </div>
+          </div>
           <div className="field">
             <span>Tags</span>
             <TagPicker value={editTags} onChange={setEditTags} />
           </div>
+          <label className="field">
+            <span>Discord user ID <span className="muted small">(optional)</span></span>
+            <input
+              inputMode="numeric"
+              value={editDiscord}
+              onChange={e => setEditDiscord(e.target.value.replace(/\D/g, ''))}
+              placeholder="e.g. 123456789012345678"
+            />
+            <span className="muted small">In Discord: Settings → Advanced → Developer Mode, then right-click the person → Copy User ID. Shows their Discord name on clock-in messages.</span>
+          </label>
           <p className="muted small">PIN {editing.pin} · {editing.active ? 'Active' : 'Inactive'}</p>
         </Modal>
       )}

@@ -5,8 +5,10 @@ import { STATUS_META, StatusKey, initials, locationOf } from '../../lib/time';
 export type MessageType = 'success' | 'error' | 'warning' | 'info';
 export type ShowMessage = (text: string, type: MessageType) => void;
 
-export const Avatar: React.FC<{ name: string; tags?: string[] }> = ({ name, tags = [] }) => (
-  <span className={`avatar loc-${locationOf(tags) || 'none'}`}>{initials(name)}</span>
+export const Avatar: React.FC<{ name: string; tags?: string[]; url?: string | null }> = ({ name, tags = [], url }) => (
+  url
+    ? <img className="avatar avatar-photo" src={url} alt="" loading="lazy" />
+    : <span className={`avatar loc-${locationOf(tags) || 'none'}`}>{initials(name)}</span>
 );
 
 export const LocationBadge: React.FC<{ tags?: string[] }> = ({ tags = [] }) => {

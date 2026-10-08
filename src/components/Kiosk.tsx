@@ -2,12 +2,18 @@ import React, { useEffect, useRef, useState } from 'react';
 import Keypad from './Keypad';
 import HalloweenDecor from './HalloweenDecor';
 import PWAInstaller from './PWAInstaller';
-import { STATUS_META, statusFromAction, fmtClock, fmtDuration, parseRecordTime, todayIso } from '../lib/time';
+import { STATUS_META, statusFromAction, fmtClock, fmtDuration, parseRecordTime, todayIso, initials } from '../lib/time';
+import { prepareAvatar } from '../lib/image';
 
 type MessageType = 'success' | 'error' | 'warning' | 'info';
 
+export type ThemePref = 'auto' | 'classic';
+
 interface KioskProps {
-  theme: string;
+  theme: string;          // theme actually shown
+  siteTheme: string;      // holiday theme picked by admins
+  themePref: ThemePref;   // this device's choice
+  onThemePrefChange: (pref: ThemePref) => void;
   isAdmin: boolean;
   onOpenAdmin: () => void;
   showMessage: (text: string, type: MessageType) => void;
@@ -19,6 +25,7 @@ interface Employee {
   since: number | null;
   todayWorked: number;
   firstIn: number | null;
+  avatarUrl: string | null;
 }
 
 // Which action may follow the employee's last action (null = no records yet)
@@ -89,7 +96,9 @@ const daysUntilHalloween = (): number => {
   return Math.round((halloween.getTime() - today.getTime()) / 86400000);
 };
 
-const Kiosk: React.FC<KioskProps> = ({ theme, isAdmin, onOpenAdmin, showMessage }) => {
+const THEME_NAMES: { [theme: string]: string } = { halloween: 'Halloween' };
+
+const Kiosk: React.FC<KioskProps> = ({ theme, siteTheme, themePref, onThemePrefChange, isAdmin, onOpenAdmin, showMessage }) => {
   const [pin, setPin] = useState('');
   const [rememberPin, setRememberPin] = useState(false);
   const [employee, setEmployee] = useState<Employee | null>(null);
@@ -97,7 +106,11 @@ const Kiosk: React.FC<KioskProps> = ({ theme, isAdmin, onOpenAdmin, showMessage 
   const [busy, setBusy] = useState(false);
   const [clock, setClock] = useState(pstNow());
   const [shake, setShake] = useState(false);
+  const [uploading, setUploading] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
+  const themePrefRef = useRef(themePref);
+  themePrefRef.current = themePref;
   const halloween = theme === 'halloween';
 
   useEffect(() => {
@@ -146,9 +159,17 @@ const Kiosk: React.FC<KioskProps> = ({ theme, isAdmin, onOpenAdmin, showMessage 
           action: data.action,
           since: last && last.dateKey === todayKey() ? last.minutes : null,
           todayWorked: data.today?.worked || 0,
-          firstIn: data.today?.firstIn ?? null
+          firstIn: data.today?.firstIn ?? null,
+          avatarUrl: data.avatarUrl || null
         });
         setLookupState('idle');
+        // The agent's saved theme choice follows them to any device. If they never
+        // chose one but turned the holiday theme off here, remember that for them.
+        if (data.themePref) {
+          if (data.themePref !== themePrefRef.current) onThemePrefChange(data.themePref);
+        } else if (themePrefRef.current === 'classic') {
+          savePref('classic');
+        }
       })
       .catch(() => {
         if (!cancelled) {
@@ -158,6 +179,61 @@ const Kiosk: React.FC<KioskProps> = ({ theme, isAdmin, onOpenAdmin, showMessage 
       });
     return () => { cancelled = true; };
   }, [pin]);
+
+  const savePref = (pref: ThemePref) => {
+    fetch('/me/preferences', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ pin, themePref: pref })
+    }).catch(() => { /* device setting still applies */ });
+  };
+
+  const toggleTheme = () => {
+    const next: ThemePref = themePref === 'classic' ? 'auto' : 'classic';
+    onThemePrefChange(next);
+    if (employee) savePref(next);
+    showMessage(next === 'classic'
+      ? 'Holiday theme turned off. Showing the standard look.'
+      : `${THEME_NAMES[siteTheme] || 'Holiday'} theme turned on.`, 'info');
+  };
+
+  const uploadPhoto = async (file: File | undefined) => {
+    if (!file || !employee) return;
+    setUploading(true);
+    try {
+      const image = await prepareAvatar(file);
+      const response = await fetch('/me/avatar', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ pin, image })
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || 'Upload failed');
+      setEmployee({ ...employee, avatarUrl: data.avatarUrl });
+      showMessage('Profile photo saved. It will show on your Discord clock-ins.', 'success');
+    } catch (error: any) {
+      showMessage(error.message, 'error');
+    } finally {
+      setUploading(false);
+      if (fileRef.current) fileRef.current.value = '';
+    }
+  };
+
+  const removePhoto = async () => {
+    if (!employee || !window.confirm('Remove your profile photo?')) return;
+    try {
+      const response = await fetch('/me/avatar/remove', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ pin })
+      });
+      if (!response.ok) throw new Error((await response.json()).error || 'Could not remove photo');
+      setEmployee({ ...employee, avatarUrl: null });
+      showMessage('Profile photo removed', 'info');
+    } catch (error: any) {
+      showMessage(error.message, 'error');
+    }
+  };
 
   const triggerShake = () => {
     setShake(true);
@@ -284,6 +360,17 @@ const Kiosk: React.FC<KioskProps> = ({ theme, isAdmin, onOpenAdmin, showMessage 
           <div className="kiosk-date">
             {clock.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })} · Pacific Time
           </div>
+          {siteTheme !== 'default' && (
+            <button
+              className={`theme-toggle ${themePref === 'classic' ? 'off' : 'on'}`}
+              onClick={toggleTheme}
+              aria-pressed={themePref !== 'classic'}
+              title="Turn the holiday theme on or off for you"
+            >
+              <span className="theme-toggle-track"><span className="theme-toggle-thumb" /></span>
+              {siteTheme === 'halloween' ? '🎃' : '🎉'} {THEME_NAMES[siteTheme] || 'Holiday'} theme
+            </button>
+          )}
         </div>
       </header>
 
@@ -300,10 +387,36 @@ const Kiosk: React.FC<KioskProps> = ({ theme, isAdmin, onOpenAdmin, showMessage 
         <section className={`kiosk-card ${shake ? 'shake' : ''}`}>
           <div className="kiosk-greeting">
             {employee ? (
-              <>
-                <span className="kiosk-hello">{halloween ? 'Boo! Welcome,' : 'Welcome,'}</span>
-                <span className="kiosk-name">{employee.name}</span>
-              </>
+              <div className="kiosk-who">
+                <button
+                  className={`kiosk-avatar ${employee.avatarUrl ? 'has-photo' : ''}`}
+                  onClick={() => fileRef.current?.click()}
+                  disabled={uploading}
+                  title={employee.avatarUrl ? 'Change your photo' : 'Add a profile photo'}
+                  aria-label={employee.avatarUrl ? 'Change your profile photo' : 'Add a profile photo'}
+                >
+                  {employee.avatarUrl
+                    ? <img src={employee.avatarUrl} alt="" />
+                    : <span className="kiosk-avatar-initials">{initials(employee.name)}</span>}
+                  <span className="kiosk-avatar-badge">{uploading ? '…' : '📷'}</span>
+                </button>
+                <input
+                  ref={fileRef}
+                  type="file"
+                  accept="image/*"
+                  hidden
+                  onChange={(e) => uploadPhoto(e.target.files?.[0])}
+                />
+                <div className="kiosk-who-text">
+                  <span className="kiosk-hello">{halloween ? 'Boo! Welcome,' : 'Welcome,'}</span>
+                  <span className="kiosk-name">{employee.name}</span>
+                  {!employee.avatarUrl && (
+                    <button className="kiosk-photo-hint" onClick={() => fileRef.current?.click()} disabled={uploading}>
+                      {uploading ? 'Uploading…' : 'Add a photo so the team knows it’s you'}
+                    </button>
+                  )}
+                </div>
+              </div>
             ) : (
               <>
                 <span className="kiosk-hello">Time clock</span>
@@ -392,7 +505,10 @@ const Kiosk: React.FC<KioskProps> = ({ theme, isAdmin, onOpenAdmin, showMessage 
               />
               Remember my PIN on this device
             </label>
-            {pin && <button className="kiosk-link" onClick={clearPin}>Not you? Clear</button>}
+            <span className="kiosk-footer-links">
+              {employee?.avatarUrl && <button className="kiosk-link" onClick={removePhoto}>Remove photo</button>}
+              {pin && <button className="kiosk-link" onClick={clearPin}>Not you? Clear</button>}
+            </span>
           </div>
         </section>
 

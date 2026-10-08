@@ -46,6 +46,8 @@ Set these on the hosting service (Render → service → Environment). Never com
 | `DISCORD_WEBHOOK_URL` | optional | Channel for clock-in/out/break notifications |
 | `ABSENCE_WEBHOOK_URL` | optional | Channel for "marked absent" alerts |
 | `CRON_SECRET` | for auto clock-out | Shared secret for the scheduled auto clock-out job |
+| `TIMECLOCK_API_KEY` | for the stats API | Key for the read-only API at `/api/v1` (see `docs/API.md`) |
+| `PUBLIC_URL` | recommended | Public address, e.g. `https://app.pwrhze.com`, used for avatar links in Discord |
 | `AUTO_CLOCKOUT_ENABLED` / `AUTO_CLOCKOUT_HOUR` / `AUTO_CLOCKOUT_MINUTE` | optional | Defaults: enabled, 16:30 PST |
 
 ### Auto clock-out

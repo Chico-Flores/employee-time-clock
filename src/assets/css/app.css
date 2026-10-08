@@ -325,6 +325,77 @@ html[data-theme='halloween'][data-view='kiosk'] .toast {
 }
 .kiosk-link:hover { color: var(--k-text); background: rgba(255, 255, 255, 0.08); }
 
+/* Agent photo + greeting */
+.kiosk-who { display: flex; align-items: center; gap: 14px; }
+.kiosk-who-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.kiosk-avatar {
+  position: relative;
+  width: 64px;
+  height: 64px;
+  flex: none;
+  border-radius: 50%;
+  border: 2px dashed var(--k-key-border);
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--k-text);
+  cursor: pointer;
+  padding: 0;
+  transition: transform 0.15s ease, border-color 0.2s ease;
+}
+.kiosk-avatar:hover:not(:disabled) { transform: scale(1.05); border-color: var(--k-highlight); }
+.kiosk-avatar.has-photo { border: 2px solid var(--k-accent-from); box-shadow: 0 0 0 4px rgba(255, 255, 255, 0.08); }
+.kiosk-avatar img { width: 100%; height: 100%; border-radius: 50%; object-fit: cover; display: block; }
+.kiosk-avatar-initials { font-size: 20px; font-weight: 800; letter-spacing: 0.02em; }
+.kiosk-avatar-badge {
+  position: absolute;
+  right: -4px;
+  bottom: -4px;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  background: #fff;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.35);
+}
+.kiosk-photo-hint {
+  align-self: flex-start;
+  background: none;
+  border: none;
+  padding: 2px 0;
+  color: var(--k-highlight);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.kiosk-footer-links { display: inline-flex; gap: 4px; flex-wrap: wrap; }
+
+/* Per-agent holiday theme switch */
+.theme-toggle {
+  margin-top: 10px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px 6px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--k-panel-border);
+  background: var(--k-panel);
+  color: var(--k-text);
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
+.theme-toggle:hover { border-color: var(--k-highlight); }
+.theme-toggle-track { position: relative; width: 32px; height: 18px; border-radius: 999px; background: rgba(255, 255, 255, 0.25); transition: background 0.2s ease; }
+.theme-toggle-thumb { position: absolute; top: 2px; left: 2px; width: 14px; height: 14px; border-radius: 50%; background: #fff; transition: transform 0.2s ease; }
+.theme-toggle.on .theme-toggle-track { background: var(--k-accent-to); }
+.theme-toggle.on .theme-toggle-thumb { transform: translateX(14px); }
+
 /* Keypad */
 .keypad { display: grid; grid-template-columns: repeat(3, 92px); gap: 14px; }
 .keypad-key {
@@ -695,6 +766,14 @@ html[data-theme='halloween'] .kiosk-card { box-shadow: 0 30px 80px rgba(0, 0, 0,
 .avatar.loc-EG { background: #e0f2fe; color: #075985; }
 .avatar.loc-RS { background: #ede9fe; color: #5b21b6; }
 
+.avatar-photo { object-fit: cover; background: #e2e8f0; }
+.photo-row { display: flex; align-items: center; gap: 14px; }
+.photo-row .avatar { width: 64px; height: 64px; border-radius: 18px; font-size: 18px; }
+.photo-row-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.photo-row-actions .btn { cursor: pointer; }
+.photo-row-actions .btn.disabled { opacity: 0.55; pointer-events: none; }
+.field .small { font-weight: 500; }
+
 .loc-badge { display: inline-block; padding: 3px 8px; border-radius: 6px; font-size: 11.5px; font-weight: 800; letter-spacing: 0.04em; background: #f1f5f9; color: #334155; }
 .loc-badge.loc-PH { background: #dbeafe; color: #1e40af; }
 .loc-badge.loc-TJ { background: #dcfce7; color: #166534; }
@@ -873,6 +952,7 @@ html[data-theme='halloween'] .kiosk-card { box-shadow: 0 30px 80px rgba(0, 0, 0,
   .kiosk { padding-top: 16px; }
   .kiosk-header { justify-content: center; text-align: center; }
   .kiosk-clock { text-align: center; }
+  .kiosk-avatar { width: 54px; height: 54px; }
   .kiosk-logo { height: 48px; }
   .kiosk-card { padding: 22px; border-radius: 22px; }
   .kiosk-name { font-size: 26px; }

@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import Kiosk from './components/Kiosk';
+import Kiosk, { ThemePref } from './components/Kiosk';
 import AdminPortal from './components/admin/AdminPortal';
 import Login from './components/Login';
 import CreateAdmin from './components/CreateAdmin';
@@ -30,7 +30,15 @@ const showMessage = (text: string, type: MessageType) => {
 const App: React.FC = () => {
   const [auth, setAuth] = useState<'checking' | 'in' | 'out'>('checking');
   const [view, setView] = useState<'kiosk' | 'admin'>('kiosk');
-  const [theme, setTheme] = useState('default');
+  const [theme, setTheme] = useState('default'); // holiday theme picked by admins
+  // Each device/agent can opt out of the holiday theme
+  const [themePref, setThemePref] = useState<ThemePref>(() => {
+    try { return localStorage.getItem('themePref') === 'classic' ? 'classic' : 'auto'; } catch { return 'auto'; }
+  });
+  const changeThemePref = useCallback((pref: ThemePref) => {
+    setThemePref(pref);
+    try { localStorage.setItem('themePref', pref); } catch { /* ignore */ }
+  }, []);
   const [showLogin, setShowLogin] = useState(false);
   const [needsSetup, setNeedsSetup] = useState(false);
 
@@ -69,14 +77,15 @@ const App: React.FC = () => {
   }, [loadTheme]);
 
   const inAdmin = auth === 'in' && view === 'admin';
+  const shownTheme = !inAdmin && themePref === 'classic' ? 'default' : theme;
 
   useEffect(() => {
     const root = document.documentElement;
-    root.dataset.theme = theme;
+    root.dataset.theme = shownTheme;
     root.dataset.view = inAdmin ? 'admin' : 'kiosk';
-    document.querySelector('meta[name="theme-color"]')?.setAttribute('content', inAdmin ? '#0f172a' : THEME_COLORS[theme] || THEME_COLORS.default);
+    document.querySelector('meta[name="theme-color"]')?.setAttribute('content', inAdmin ? '#0f172a' : THEME_COLORS[shownTheme] || THEME_COLORS.default);
     document.title = inAdmin ? 'Admin · Time Clock' : 'Employee Time Clock';
-  }, [theme, inAdmin]);
+  }, [shownTheme, inAdmin]);
 
   const logout = useCallback(() => {
     fetch('/logout', { method: 'POST', credentials: 'include' }).finally(() => {
@@ -120,7 +129,10 @@ const App: React.FC = () => {
         />
       ) : (
         <Kiosk
-          theme={theme}
+          theme={shownTheme}
+          siteTheme={theme}
+          themePref={themePref}
+          onThemePrefChange={changeThemePref}
           isAdmin={auth === 'in'}
           onOpenAdmin={() => (auth === 'in' ? setView('admin') : setShowLogin(true))}
           showMessage={showMessage}

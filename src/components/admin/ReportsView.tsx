@@ -4,6 +4,7 @@ import { Avatar, LocationBadge, EmptyState, ShowMessage, api, downloadCsv } from
 import { fmtDuration, fmtHours, todayIso, shiftIso, isoLabel, LOCATIONS, locationOf, roleOf } from '../../lib/time';
 
 interface HoursRow {
+  avatarUrl?: string | null;
   name: string;
   pin: string;
   tags: string[];
@@ -176,7 +177,7 @@ const ReportsView: React.FC<{ showMessage: ShowMessage }> = ({ showMessage }) =>
                   <tr key={r.pin} className={r.active ? '' : 'row-muted'}>
                     <td>
                       <div className="agent-cell">
-                        <Avatar name={r.name} tags={r.tags} />
+                        <Avatar name={r.name} tags={r.tags} url={r.avatarUrl} />
                         <div>
                           <div className="agent-name">{r.name}</div>
                           <div className="muted small">{roleOf(r.tags)}{!r.active && ' · inactive'}</div>
