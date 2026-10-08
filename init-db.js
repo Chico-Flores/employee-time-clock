@@ -43,6 +43,8 @@ async function connectDB() {
     await db.collection('users').createIndex({ username: 1 }, { unique: true, sparse: true });
     await db.collection('records').createIndex({ pin: 1 });
     await db.collection('records').createIndex({ time: -1 });
+    // Scheduled-job markers (auto clock-out, alerts) only need to live a month
+    await db.collection('jobs').createIndex({ at: 1 }, { expireAfterSeconds: 30 * 24 * 3600 });
     
     console.log('✅ Database indexes created');
     

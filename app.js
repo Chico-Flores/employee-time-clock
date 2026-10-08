@@ -52,6 +52,7 @@ const VALID_TRANSITIONS = {
     EndMeeting: ['StartMeeting']
 };
 const WORKING_ACTIONS = ['ClockIn', 'EndBreak', 'EndRestroom', 'EndLunch', 'EndItIssue', 'EndMeeting'];
+const IT_REASONS = ['Internet', 'Dialer', 'Headset', 'PC', 'Power outage', 'Other'];
 
 // Fields never sent to the browser
 const USER_PROJECTION = { projection: { password: 0, loginToken: 0 } };
@@ -256,9 +257,44 @@ function currentLateRules(isoToday) {
     return out;
 }
 
+// ---------- Team schedule: auto clock-out, no-show alerts, long-status limits ----------
+const SCHEDULE_KEYS = [...LATE_LOCATIONS, 'default'];
+const DEFAULT_SCHEDULE = {
+    // Minutes after midnight PST. PH/EG shifts end 3:30 PM; most of Mexico leaves 3:30, a few stay to 4:00.
+    autoClockOut: { PH: 15 * 60 + 35, EG: 15 * 60 + 35, TJ: 16 * 60, RS: 16 * 60, default: AUTO_CLOCKOUT_HOUR * 60 + AUTO_CLOCKOUT_MINUTE },
+    // "Possibly absent" alert to team leads (weekdays). null = off.
+    noShowAt: { PH: 6 * 60 + 45, EG: 6 * 60 + 45, TJ: null, RS: null, default: null },
+    // Minutes before a status is flagged as too long
+    alertLimits: { break: 20, restroom: 15, lunch: 65, itIssue: 30 }
+};
+let schedule = JSON.parse(JSON.stringify(DEFAULT_SCHEDULE));
+let teamLeadWebhook = process.env.TEAM_LEAD_WEBHOOK_URL || '';
+
+function teamValue(map, tags) {
+    const loc = locationOfTags(tags);
+    return loc && map[loc] !== undefined ? map[loc] : map.default;
+}
+
 async function loadSettings() {
     const doc = await getDB().collection('settings').findOne({ _id: 'app' });
     if (doc && Array.isArray(doc.lateHistory) && doc.lateHistory.length) lateHistory = doc.lateHistory;
+    if (doc && doc.schedule) {
+        for (const key of Object.keys(DEFAULT_SCHEDULE)) {
+            schedule[key] = { ...DEFAULT_SCHEDULE[key], ...(doc.schedule[key] || {}) };
+        }
+    }
+    if (doc && doc.teamLeadWebhook) teamLeadWebhook = doc.teamLeadWebhook;
+}
+
+// Claim a one-time job (e.g. "noshow|PH|2026-10-08"). Returns false if it already ran.
+async function claimJob(id) {
+    try {
+        await getDB().collection('jobs').insertOne({ _id: id, at: new Date() });
+        return true;
+    } catch (error) {
+        if (error.code === 11000) return false;
+        throw error;
+    }
 }
 const BREAK_TYPES = { StartBreak: 'break', StartLunch: 'lunch', StartRestroom: 'restroom', StartMeeting: 'meeting', StartItIssue: 'itIssue' };
 
@@ -366,7 +402,10 @@ function groupByPin(records) {
 }
 
 function publicRecord(r) {
-    return { name: r.name, pin: r.pin, action: r.action, time: r.time, admin_action: !!r.admin_action, note: r.note || undefined };
+    return {
+        name: r.name, pin: r.pin, action: r.action, time: r.time, admin_action: !!r.admin_action,
+        note: r.note || undefined, reason: r.reason || undefined, details: r.details || undefined
+    };
 }
 
 // Helper function to get current PST time as formatted string
@@ -387,7 +426,7 @@ function getPSTTime() {
 
 // Function to send Discord notification
 // `who` is the employee document (name, avatar, Discord id, tags) or just a name
-async function sendDiscordNotification(who, action, time, isAdminAction = false, note = '') {
+async function sendDiscordNotification(who, action, time, isAdminAction = false, note = '', extra = {}) {
     const user = typeof who === 'string' ? { name: who } : who;
     const name = user.name;
     if (!DISCORD_WEBHOOK_URL) {
@@ -414,6 +453,7 @@ async function sendDiscordNotification(who, action, time, isAdminAction = false,
 
     let title = `${config.emoji} ${name} ${config.text}`;
     let description = `**Time (PST):** ${time}`;
+    if (extra.reason) description += `\n**Issue:** ${extra.reason}${extra.details ? ` · ${extra.details}` : ''}`;
     if (user.discordId) description += `\n**Discord:** <@${user.discordId}>`;
 
     // Add admin indicator and note if this was an admin action
@@ -500,85 +540,197 @@ async function sendAbsenceNotification(name, date) {
     }
 }
 
-// AUTO CLOCK-OUT FUNCTION
-// Runs from the in-process timer (exact minute only) and from the scheduled
-// /cron/auto-clockout job, which fires even if the server was asleep at 4:30.
-// Safe to run more than once: it only clocks out people who are still working.
+// ---------- AUTO CLOCK-OUT (per team) ----------
+// A once-a-minute check clocks out everyone still working once their team's time has
+// passed. Each team runs at most once per day (claimed in the `jobs` collection), so a
+// restart or a late wake-up catches up without repeating.
 let autoClockOutRunning = false;
 
-function isPastAutoClockOutTime() {
-    const pstDate = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/Los_Angeles' }));
-    const minutes = pstDate.getHours() * 60 + pstDate.getMinutes();
-    return minutes >= AUTO_CLOCKOUT_HOUR * 60 + AUTO_CLOCKOUT_MINUTE;
+function fmtMinutes(m) {
+    const h24 = Math.floor(m / 60);
+    return `${h24 % 12 || 12}:${String(m % 60).padStart(2, '0')} ${h24 < 12 ? 'AM' : 'PM'}`;
 }
 
-async function performAutoClockOut() {
+function nowPst() {
+    const parsed = parseRecordTime(getPSTTime());
+    return { dateKey: parsed.dateKey, iso: dateKeyToIso(parsed.dateKey), minutes: Math.floor(parsed.minutes) };
+}
+
+// Latest record for every employee, plus their user docs
+async function latestByEmployee() {
+    const db = getDB();
+    const [latest, users] = await Promise.all([
+        db.collection('records').aggregate([
+            { $sort: { _id: -1 } },
+            { $group: { _id: '$pin', recordId: { $first: '$_id' }, action: { $first: '$action' }, time: { $first: '$time' }, reason: { $first: '$reason' }, details: { $first: '$details' } } }
+        ]).toArray(),
+        db.collection('users').find({ username: { $exists: false } }).toArray()
+    ]);
+    const byPin = Object.fromEntries(users.map(u => [u.pin, u]));
+    return latest.filter(l => byPin[l._id]).map(l => ({ ...l, user: byPin[l._id] }));
+}
+
+// teams: array of schedule keys to clock out, or null for everyone
+async function performAutoClockOut(teams = null) {
     if (autoClockOutRunning) return 0;
     autoClockOutRunning = true;
 
     try {
         const db = getDB();
+        const targets = (await latestByEmployee()).filter(l => {
+            if (!WORKING_ACTIONS.includes(l.action) && !l.action.startsWith('Start')) return false;
+            if (!teams) return true;
+            const loc = locationOfTags(l.user.tags);
+            const key = loc && schedule.autoClockOut[loc] !== undefined ? loc : 'default';
+            return teams.includes(key);
+        });
 
-        // Latest record per employee, computed in the database instead of loading every record
-        const latest = await db.collection('records').aggregate([
-            { $sort: { _id: -1 } },
-            { $group: { _id: '$pin', name: { $first: '$name' }, action: { $first: '$action' } } }
-        ]).toArray();
-
-        const employeesToClockOut = latest
-            .filter(r => WORKING_ACTIONS.includes(r.action))
-            .map(r => ({ pin: r._id, name: r.name }));
-
-        if (employeesToClockOut.length === 0) {
-            console.log('⏰ No employees to auto clock-out');
-            return 0;
-        }
-
-        console.log(`⏰ Auto clocking out ${employeesToClockOut.length} employee(s)...`);
+        if (targets.length === 0) return 0;
 
         const currentTime = getPSTTime();
-        const hour12 = AUTO_CLOCKOUT_HOUR % 12 || 12;
-        const ampm = AUTO_CLOCKOUT_HOUR < 12 ? 'AM' : 'PM';
-        const note = `Automatic clock-out at ${hour12}:${AUTO_CLOCKOUT_MINUTE.toString().padStart(2, '0')} ${ampm} PST`;
-
-        for (const employee of employeesToClockOut) {
+        for (const t of targets) {
+            const at = teamValue(schedule.autoClockOut, t.user.tags);
+            const note = teams ? `Automatic clock-out at ${fmtMinutes(at)} PST` : 'Clocked out by admin (run auto clock-out)';
             try {
                 await db.collection('records').insertOne({
-                    name: employee.name,
-                    pin: employee.pin,
+                    name: t.user.name,
+                    pin: t.user.pin,
                     action: 'ClockOut',
                     time: currentTime,
                     ip: 'AUTO-SYSTEM',
                     admin_action: true,
                     note
                 });
-
-                const user = await db.collection('users').findOne({ pin: employee.pin });
-                await sendDiscordNotification(user || employee.name, 'ClockOut', currentTime, true, note);
-
-                console.log(`✅ Auto clocked out: ${employee.name}`);
+                await sendDiscordNotification(t.user, 'ClockOut', currentTime, true, note);
+                console.log(`✅ Auto clocked out: ${t.user.name}`);
             } catch (error) {
-                console.error(`❌ Failed to auto clock-out ${employee.name}:`, error);
+                console.error(`❌ Failed to auto clock-out ${t.user.name}:`, error);
             }
         }
-
-        console.log(`⏰ Auto clock-out completed: ${employeesToClockOut.length} employee(s)`);
-        return employeesToClockOut.length;
-    } catch (error) {
-        console.error('❌ Error during auto clock-out:', error);
-        throw error;
+        console.log(`⏰ Auto clock-out completed: ${targets.length} employee(s)${teams ? ` (${teams.join(', ')})` : ''}`);
+        return targets.length;
     } finally {
         autoClockOutRunning = false;
     }
 }
 
-// In-process timer check: only fires at the exact configured minute
-async function checkAutoClockOutTime() {
-    const pstDate = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/Los_Angeles' }));
-    if (pstDate.getHours() !== AUTO_CLOCKOUT_HOUR || pstDate.getMinutes() !== AUTO_CLOCKOUT_MINUTE) {
-        return;
+async function runDueAutoClockOuts(now) {
+    if (!AUTO_CLOCKOUT_ENABLED) return 0;
+    const due = [];
+    for (const key of SCHEDULE_KEYS) {
+        const at = schedule.autoClockOut[key];
+        if (at === null || at === undefined || now.minutes < at) continue;
+        if (await claimJob(`autoout|${key}|${now.iso}`)) due.push(key);
     }
-    await performAutoClockOut().catch(() => {});
+    return due.length ? performAutoClockOut(due) : 0;
+}
+
+// ---------- Team lead alerts (Discord) ----------
+
+async function sendTeamLeadAlert(embed, content) {
+    if (!teamLeadWebhook) return false;
+    try {
+        const response = await fetch(teamLeadWebhook, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                content: content || undefined,
+                embeds: [{ footer: { text: 'Employee Time Clock · team lead alert' }, timestamp: new Date().toISOString(), ...embed }],
+                allowed_mentions: { parse: [] }
+            })
+        });
+        if (!response.ok) console.error('Team lead alert failed:', response.status, response.statusText);
+        return response.ok;
+    } catch (error) {
+        console.error('Team lead alert error:', error);
+        return false;
+    }
+}
+
+const LONG_STATUS = {
+    StartBreak: { key: 'break', label: 'on break', emoji: '☕' },
+    StartLunch: { key: 'lunch', label: 'at lunch', emoji: '🍔' },
+    StartRestroom: { key: 'restroom', label: 'on a restroom break', emoji: '🚻' },
+    StartItIssue: { key: 'itIssue', label: 'reporting an IT issue', emoji: '💻' }
+};
+
+async function checkLongStatuses(now) {
+    for (const l of await latestByEmployee()) {
+        const kind = LONG_STATUS[l.action];
+        if (!kind || l.user.active === false) continue;
+        const limit = schedule.alertLimits[kind.key];
+        const started = parseRecordTime(l.time);
+        if (!limit || !started || started.dateKey !== now.dateKey) continue;
+        const elapsed = Math.floor(now.minutes - started.minutes);
+        if (elapsed < limit) continue;
+        if (!(await claimJob(`long|${l.recordId}`))) continue;
+
+        const loc = locationOfTags(l.user.tags);
+        let description = `**${l.user.name}**${loc ? ` (${loc})` : ''} has been ${kind.label} for **${elapsed} minutes** (limit ${limit}).\nStarted at ${fmtMinutes(Math.floor(started.minutes))} PST.`;
+        if (l.reason) description += `\n**Issue:** ${l.reason}${l.details ? ` · ${l.details}` : ''}`;
+        if (l.user.discordId) description += `\n**Discord:** <@${l.user.discordId}>`;
+        const avatar = avatarAbsoluteUrl(l.user);
+        await sendTeamLeadAlert({
+            title: `${kind.emoji} Long ${kind.key === 'itIssue' ? 'IT issue' : kind.key}: ${l.user.name}`,
+            description,
+            color: kind.key === 'itIssue' ? 15158332 : 15844367,
+            ...(avatar ? { thumbnail: { url: avatar } } : {})
+        });
+    }
+}
+
+async function checkNoShows(now) {
+    const weekday = new Date(`${now.iso}T12:00:00Z`).getUTCDay();
+    if (weekday === 0 || weekday === 6) return;
+
+    const dueTeams = SCHEDULE_KEYS.filter(key => {
+        const at = schedule.noShowAt[key];
+        // Only within 2 hours of the alert time, so a late restart doesn't send stale alerts
+        return at !== null && at !== undefined && now.minutes >= at && now.minutes < at + 120;
+    });
+    if (!dueTeams.length) return;
+
+    const db = getDB();
+    const [users, todays] = await Promise.all([
+        db.collection('users').find({ username: { $exists: false }, active: { $ne: false } }).toArray(),
+        db.collection('records').find({ time: dateKeyRegex(now.dateKey) }).toArray()
+    ]);
+    const seen = new Set(todays.map(r => r.pin));
+
+    for (const key of dueTeams) {
+        if (!(await claimJob(`noshow|${key}|${now.iso}`))) continue;
+        const missing = users.filter(u => {
+            const loc = locationOfTags(u.tags);
+            const team = loc && schedule.noShowAt[loc] !== undefined ? loc : 'default';
+            return team === key && !seen.has(u.pin) && !(u.tags || []).includes('Admin');
+        });
+        if (!missing.length) continue;
+        const teamName = { PH: 'Philippines', EG: 'Egypt', TJ: 'Tijuana', RS: 'Rosarito', default: 'Other' }[key];
+        const base = PUBLIC_URL || lastSeenOrigin;
+        await sendTeamLeadAlert({
+            title: `⚠️ Possibly absent: ${missing.length} ${teamName} agent${missing.length > 1 ? 's' : ''} not clocked in`,
+            description: `Not clocked in by **${fmtMinutes(schedule.noShowAt[key])} PST**:\n` +
+                missing.map(u => `• **${u.name}**${u.discordId ? ` (<@${u.discordId}>)` : ''}`).join('\n') +
+                (base ? `\n\nMark absent in the [admin portal](${base}) if they're out today.` : ''),
+            color: 15105570
+        });
+    }
+}
+
+let scheduleRunning = false;
+async function runScheduledJobs() {
+    if (scheduleRunning) return;
+    scheduleRunning = true;
+    try {
+        const now = nowPst();
+        await runDueAutoClockOuts(now);
+        await checkNoShows(now);
+        await checkLongStatuses(now);
+    } catch (error) {
+        console.error('❌ Scheduled job error:', error);
+    } finally {
+        scheduleRunning = false;
+    }
 }
 
 // Main route
@@ -736,20 +888,27 @@ app.post('/add-record', async (req, res) => {
             });
         }
 
+        // IT issues need a reason so leads know what's broken
+        let reason, details;
+        if (action === 'StartItIssue') {
+            reason = req.body.reason;
+            if (!IT_REASONS.includes(reason)) {
+                return res.status(400).json({ error: 'Please choose what the IT issue is' });
+            }
+            details = String(req.body.details || '').trim().slice(0, 200) || undefined;
+        }
+
         // Time and IP come from the server, not the browser
         const time = getPSTTime();
         const ip = getClientIp(req);
         const name = user.name;
-        const result = await db.collection('records').insertOne({ 
-            name, 
-            pin, 
-            action, 
-            time, 
-            ip 
-        });
+        const record = { name, pin, action, time, ip };
+        if (reason) record.reason = reason;
+        if (details) record.details = details;
+        const result = await db.collection('records').insertOne(record);
 
         // Send Discord notification (non-blocking)
-        sendDiscordNotification(user, action, time).catch(console.error);
+        sendDiscordNotification(user, action, time, false, '', { reason, details }).catch(console.error);
 
         res.status(201).json({ id: result.insertedId, name, time, ip });
     } catch (error) {
@@ -1150,8 +1309,8 @@ app.post('/set-employee-active', requireAdmin, async (req, res) => {
 app.post('/test-auto-clockout', requireAdmin, async (req, res) => {
     try {
         console.log('🧪 Manual test of auto clock-out triggered');
-        const count = await performAutoClockOut();
-        res.json({ success: true, message: `Auto clock-out test completed (${count} clocked out)` });
+        const count = await performAutoClockOut(null);
+        res.json({ success: true, message: `Clocked out ${count} agent${count === 1 ? '' : 's'}` });
     } catch (error) {
         console.error('Test auto clock-out error:', error);
         res.status(500).json({ error: error.message });
@@ -1253,13 +1412,31 @@ app.get('/avatars/:id', async (req, res) => {
     }
 });
 
+app.post('/admin/test-alert', requireAdmin, async (req, res) => {
+    if (!teamLeadWebhook) return res.status(400).json({ error: 'Add the team lead webhook first' });
+    const ok = await sendTeamLeadAlert({
+        title: '✅ Time clock alerts are connected',
+        description: 'This channel will get long break / lunch / IT issue alerts and morning "possibly absent" alerts.',
+        color: 3066993
+    });
+    if (!ok) return res.status(502).json({ error: 'Discord rejected the message. Check the webhook URL.' });
+    res.json({ success: true });
+});
+
 // ---------- Settings (holiday theme) ----------
 const THEMES = ['default', 'halloween'];
 
 app.get('/settings', async (req, res) => {
     try {
         const doc = await getDB().collection('settings').findOne({ _id: 'app' });
-        res.json({ theme: doc?.theme || 'default', themes: THEMES, lateRules: currentLateRules(todayIsoPst()) });
+        res.json({
+            theme: doc?.theme || 'default',
+            themes: THEMES,
+            lateRules: currentLateRules(todayIsoPst()),
+            schedule,
+            itReasons: IT_REASONS,
+            teamLeadAlerts: !!teamLeadWebhook
+        });
     } catch (error) {
         res.status(500).json({ error: error.message });
     }
@@ -1267,8 +1444,38 @@ app.get('/settings', async (req, res) => {
 
 // Body: { theme } and/or { lateRules: { PH: minutes, EG: ..., TJ: ..., RS: ..., default: ... } }
 app.post('/settings', requireAdmin, async (req, res) => {
-    const { theme, lateRules } = req.body;
+    const { theme, lateRules, schedule: scheduleIn, teamLeadWebhook: webhookIn } = req.body;
     const update = {};
+
+    if (scheduleIn !== undefined) {
+        const next = JSON.parse(JSON.stringify(schedule));
+        const validMinutes = v => v === null || (Number.isInteger(v) && v >= 0 && v < 24 * 60);
+        for (const field of ['autoClockOut', 'noShowAt']) {
+            for (const key of SCHEDULE_KEYS) {
+                const v = scheduleIn[field]?.[key];
+                if (v === undefined) continue;
+                if (!validMinutes(v) || (field === 'autoClockOut' && v === null && key === 'default')) {
+                    return res.status(400).json({ error: `Invalid ${field} time for ${key}` });
+                }
+                next[field][key] = v;
+            }
+        }
+        for (const key of Object.keys(DEFAULT_SCHEDULE.alertLimits)) {
+            const v = scheduleIn.alertLimits?.[key];
+            if (v === undefined) continue;
+            if (!Number.isInteger(v) || v < 1 || v > 480) return res.status(400).json({ error: `Invalid alert limit for ${key}` });
+            next.alertLimits[key] = v;
+        }
+        update.schedule = next;
+    }
+
+    if (webhookIn !== undefined) {
+        const url = String(webhookIn || '').trim();
+        if (url && !/^https:\/\/(discord|discordapp)\.com\/api\/webhooks\/\d+\/[\w-]+$/.test(url)) {
+            return res.status(400).json({ error: 'That doesn\'t look like a Discord webhook URL' });
+        }
+        update.teamLeadWebhook = url;
+    }
 
     if (theme !== undefined) {
         if (!THEMES.includes(theme)) return res.status(400).json({ error: 'Unknown theme' });
@@ -1298,7 +1505,9 @@ app.post('/settings', requireAdmin, async (req, res) => {
     try {
         await getDB().collection('settings').updateOne({ _id: 'app' }, { $set: update }, { upsert: true });
         if (update.lateHistory) lateHistory = update.lateHistory;
-        res.json({ theme: update.theme, lateRules: currentLateRules(todayIsoPst()) });
+        if (update.schedule) schedule = update.schedule;
+        if (update.teamLeadWebhook !== undefined) teamLeadWebhook = update.teamLeadWebhook || process.env.TEAM_LEAD_WEBHOOK_URL || '';
+        res.json({ theme: update.theme, lateRules: currentLateRules(todayIsoPst()), schedule, teamLeadAlerts: !!teamLeadWebhook });
     } catch (error) {
         res.status(500).json({ error: error.message });
     }
@@ -1335,6 +1544,7 @@ async function buildDay(db, dateKey, endMinutes) {
         .map(e => ({
             ...employeeInfo(e),
             ...summarizeDay(byPin[e.pin] || [], endMinutes, lateAfterFor(e.tags, dateKey)),
+            autoClockOut: AUTO_CLOCKOUT_ENABLED ? teamValue(schedule.autoClockOut, e.tags) : null,
             events: (byPin[e.pin] || []).map(publicRecord)
         }));
     return { rows, records };
@@ -1353,6 +1563,7 @@ async function getOverview() {
         const parsed = last ? parseRecordTime(last.time) : null;
         r.lastAction = last ? last.action : null;
         r.lastTime = last ? last.time : null;
+        r.lastReason = last && last.action === 'StartItIssue' ? [last.reason, last.details].filter(Boolean).join(' · ') || null : null;
         r.sinceMinutes = parsed && parsed.dateKey === nowParsed.dateKey ? Math.round(parsed.minutes) : null;
         r.staleOpen = !!(last && parsed && parsed.dateKey !== nowParsed.dateKey && last.action !== 'ClockOut' && last.action !== 'Absent');
         delete r.events;
@@ -1362,7 +1573,8 @@ async function getOverview() {
         now,
         nowMinutes: Math.round(nowParsed.minutes),
         lateAfterMinutes: LATE_AFTER_MINUTES,
-        autoClockOut: AUTO_CLOCKOUT_ENABLED ? AUTO_CLOCKOUT_HOUR * 60 + AUTO_CLOCKOUT_MINUTE : null,
+        autoClockOut: AUTO_CLOCKOUT_ENABLED ? schedule.autoClockOut.default : null,
+        alertLimits: schedule.alertLimits,
         employees: rows.filter(r => r.active),
         activity: records.slice(-40).reverse().map(publicRecord)
     };
@@ -1512,25 +1724,13 @@ app.get('/api/v1/agents/:name', handle(async (req, res) => {
     });
 }));
 
-// Auto clock-out trigger for an external scheduler (only needed if the server can sleep).
-// Calls before the configured PST time are ignored.
+// Scheduled-jobs trigger for an external scheduler (only needed if the server can sleep)
 app.post('/cron/auto-clockout', async (req, res) => {
     if (!CRON_SECRET || req.get('x-cron-secret') !== CRON_SECRET) {
         return res.status(401).json({ error: 'Unauthorized' });
     }
-    if (!AUTO_CLOCKOUT_ENABLED) {
-        return res.json({ skipped: 'Auto clock-out is disabled' });
-    }
-    if (!isPastAutoClockOutTime()) {
-        return res.json({ skipped: `Before ${AUTO_CLOCKOUT_HOUR}:${AUTO_CLOCKOUT_MINUTE.toString().padStart(2, '0')} PST` });
-    }
-
-    try {
-        const count = await performAutoClockOut();
-        res.json({ success: true, clockedOut: count });
-    } catch (error) {
-        res.status(500).json({ error: error.message });
-    }
+    await runScheduledJobs();
+    res.json({ success: true });
 });
 
 // Start server after DB connection
@@ -1540,14 +1740,11 @@ connectDB().then(loadSettings).then(() => {
         console.log(`🕐 Server time zone: PST (America/Los_Angeles)`);
         console.log(`🕐 Current PST time: ${getPSTTime()}`);
         
-        // Schedule auto clock-out check
-        if (AUTO_CLOCKOUT_ENABLED) {
-            // Run every minute to check for auto clock-out time
-            setInterval(checkAutoClockOutTime, 60000); // Check every 60 seconds
-            console.log(`⏰ Auto clock-out scheduled for ${AUTO_CLOCKOUT_HOUR}:${AUTO_CLOCKOUT_MINUTE.toString().padStart(2, '0')} PST daily`);
-        } else {
-            console.log('⏰ Auto clock-out is DISABLED');
-        }
+        // Auto clock-out + team lead alerts, checked every minute
+        setInterval(runScheduledJobs, 60000);
+        setTimeout(runScheduledJobs, 5000); // catch up right after a deploy/restart
+        console.log(`⏰ Auto clock-out ${AUTO_CLOCKOUT_ENABLED ? 'by team: ' + SCHEDULE_KEYS.map(k => `${k} ${schedule.autoClockOut[k] != null ? fmtMinutes(schedule.autoClockOut[k]) : 'off'}`).join(', ') : 'DISABLED'}`);
+        console.log(`🔔 Team lead alerts ${teamLeadWebhook ? 'on' : 'off (no webhook set)'}`);
     });
 }).catch(error => {
     console.error('❌ Failed to start server:', error);

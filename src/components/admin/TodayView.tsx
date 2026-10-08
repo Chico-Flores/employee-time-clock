@@ -7,6 +7,8 @@ import {
 } from '../../lib/time';
 
 interface Row {
+  autoClockOut?: number | null;
+  lastReason?: string | null;
   lateAfter?: number;
   avatarUrl?: string | null;
   name: string;
@@ -28,8 +30,9 @@ interface Overview {
   nowMinutes: number;
   lateAfterMinutes: number;
   autoClockOut: number | null;
+  alertLimits?: { [k: string]: number };
   employees: Row[];
-  activity: { name: string; pin: string; action: string; time: string; admin_action: boolean; note?: string }[];
+  activity: { name: string; pin: string; action: string; time: string; admin_action: boolean; note?: string; reason?: string; details?: string }[];
 }
 
 type Filter = 'all' | 'onClock' | 'paused' | 'notIn' | 'absent' | 'late';
@@ -64,7 +67,7 @@ const TodayView: React.FC<{ showMessage: ShowMessage }> = ({ showMessage }) => {
   const rows = useMemo(() => (data?.employees || []).map(r => {
     const status = rowStatus(r);
     const duration = r.sinceMinutes !== null ? Math.max(0, data!.nowMinutes - r.sinceMinutes) : null;
-    const limit = LIMITS[status];
+    const limit = (data!.alertLimits as { [k in StatusKey]?: number } | undefined || LIMITS)[status];
     return { ...r, status, duration, overLimit: !!(limit && duration !== null && duration > limit) };
   }), [data]);
 
@@ -109,9 +112,10 @@ const TodayView: React.FC<{ showMessage: ShowMessage }> = ({ showMessage }) => {
     }));
     // Not in yet, and already past their team's late time
     const autoOut = data.autoClockOut ?? 24 * 60;
-    const missing = data.nowMinutes < autoOut
-      ? rows.filter(r => r.status === 'notIn' && data.nowMinutes > (r.lateAfter ?? data.lateAfterMinutes))
-      : [];
+    const missing = rows.filter(r =>
+      r.status === 'notIn' &&
+      data.nowMinutes > (r.lateAfter ?? data.lateAfterMinutes) &&
+      data.nowMinutes < (r.autoClockOut ?? autoOut));
     if (missing.length) {
       list.push({
         tone: 'slate',
@@ -257,7 +261,9 @@ const TodayView: React.FC<{ showMessage: ShowMessage }> = ({ showMessage }) => {
                       <td>
                         <StatusPill
                           status={r.status}
-                          detail={r.duration !== null && !['done', 'absent', 'notIn'].includes(r.status) ? fmtDuration(r.duration) : undefined}
+                          detail={r.duration !== null && !['done', 'absent', 'notIn'].includes(r.status)
+                            ? (r.status === 'itIssue' && r.lastReason ? `${r.lastReason} · ${fmtDuration(r.duration)}` : fmtDuration(r.duration))
+                            : undefined}
                         />
                       </td>
                       <td>
@@ -313,7 +319,8 @@ const TodayView: React.FC<{ showMessage: ShowMessage }> = ({ showMessage }) => {
                     <div className="feed-body">
                       <span className="strong">{a.name}</span> {(ACTION_LABELS[a.action] || a.action).toLowerCase()}
                       {a.admin_action && <span className="badge">admin</span>}
-                      {a.note && <div className="muted small">{a.note}</div>}
+                      {a.reason && <span className="badge badge-absent">{a.reason}</span>}
+                      {(a.details || a.note) && <div className="muted small">{a.details || a.note}</div>}
                     </div>
                     <span className="feed-time">{fmtClock(parseRecordTime(a.time)?.minutes)}</span>
                   </li>

@@ -61,7 +61,8 @@ html[data-theme='halloween'] {
   --a-accent-text: #9a3412;
 }
 
-html, body { font-family: var(--font); height: auto; min-height: 100%; }
+/* overflow-x: clip (not hidden) so position: sticky keeps working for the admin sidebar */
+html, body { font-family: var(--font); height: auto; min-height: 100%; overflow-x: clip; }
 html[data-view='kiosk'] body { background: #0b1f5c; color: var(--k-text); }
 html[data-view='kiosk'][data-theme='halloween'] body { background: #0a0418; }
 html[data-view='admin'] body { background: var(--a-bg); color: var(--a-text); }
@@ -120,7 +121,7 @@ html[data-theme='halloween'][data-view='kiosk'] .toast {
   outline: none;
   overflow: hidden;
 }
-.kiosk > *:not(.halloween-decor) { position: relative; z-index: 2; }
+.kiosk > *:not(.halloween-decor):not(.it-picker-backdrop) { position: relative; z-index: 2; }
 
 .kiosk-header {
   display: flex;
@@ -408,6 +409,48 @@ html[data-theme='halloween'][data-view='kiosk'] .toast {
 .theme-toggle-thumb { position: absolute; top: 2px; left: 2px; width: 14px; height: 14px; border-radius: 50%; background: #fff; transition: transform 0.2s ease; }
 .theme-toggle.on .theme-toggle-track { background: var(--k-accent-to); }
 .theme-toggle.on .theme-toggle-thumb { transform: translateX(14px); }
+
+/* IT issue reason picker */
+.it-picker-backdrop { position: fixed; inset: 0; z-index: 1500; background: rgba(2, 6, 23, 0.6); backdrop-filter: blur(6px); display: flex; align-items: center; justify-content: center; padding: 16px; }
+.it-picker {
+  width: min(460px, 100%);
+  background: #0f172a;
+  color: #fff;
+  border: 1px solid var(--k-panel-border);
+  border-radius: 24px;
+  padding: 24px;
+  box-shadow: 0 30px 80px rgba(0, 0, 0, 0.5);
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+html[data-theme='halloween'] .it-picker { background: #1c0b30; }
+.it-picker h3 { font-size: 22px; font-weight: 800; }
+.it-picker p { color: var(--k-muted); margin-top: -8px; }
+.it-reasons { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+.it-reason {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 14px 6px;
+  border-radius: 14px;
+  border: 2px solid var(--k-key-border);
+  background: var(--k-key);
+  color: #fff;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.it-reason:hover { border-color: var(--k-highlight); }
+.it-reason.selected { border-color: var(--k-accent-from); background: rgba(255, 255, 255, 0.14); box-shadow: 0 0 0 3px var(--k-accent-glow); }
+.it-reason-icon { font-size: 24px; line-height: 1; }
+.it-details { font: inherit; padding: 12px 14px; border-radius: 12px; border: 1px solid var(--k-key-border); background: rgba(255, 255, 255, 0.06); color: #fff; }
+.it-details::placeholder { color: var(--k-muted); }
+.it-details:focus { outline: none; border-color: var(--k-highlight); }
+.it-picker-actions { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.it-picker-actions .kiosk-primary { width: auto; min-height: 52px; padding: 0 22px; font-size: 17px; }
+.it-picker-actions .kiosk-primary:disabled { opacity: 0.45; cursor: not-allowed; }
 
 /* Keypad */
 .keypad { display: grid; grid-template-columns: repeat(3, 92px); gap: 14px; }
@@ -908,6 +951,19 @@ html[data-theme='halloween'] .kiosk-card { box-shadow: 0 30px 80px rgba(0, 0, 0,
 .late-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 14px; }
 .late-field { background: #f8fafc; border: 1px solid var(--a-border); border-radius: 12px; padding: 12px; }
 .late-field input { font-size: 16px; font-weight: 700; }
+
+.schedule-wrap { margin: 0 -20px; }
+.schedule-table input[type='time'] { font-size: 14px; font-weight: 600; }
+.schedule-table td { white-space: nowrap; }
+.time-or-off { display: flex; align-items: center; gap: 10px; }
+.time-or-off .link-btn { margin-left: 0; font-size: 12px; }
+.schedule-note { margin-top: 14px; }
+.alerts-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 24px; }
+.alerts-grid .card-actions { margin-top: 6px; }
+.limit-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+.limit-field { display: flex; flex-direction: column; gap: 4px; font-size: 12px; font-weight: 600; color: #334155; }
+.limit-field input { font: inherit; font-size: 15px; font-weight: 700; padding: 8px 10px; border-radius: 9px; border: 1px solid var(--a-border); width: 100%; }
+.limit-field input:focus { outline: none; border-color: var(--a-accent); box-shadow: 0 0 0 3px var(--a-accent-soft); }
 
 /* Modal */
 .modal-backdrop { position: fixed; inset: 0; background: rgba(15, 23, 42, 0.45); backdrop-filter: blur(4px); display: flex; align-items: center; justify-content: center; z-index: 1500; padding: 16px; animation: fadeIn 0.2s ease; }

@@ -54,6 +54,7 @@ clock(400); // "6:40 AM"
   - **Philippines and Egypt:** late after **6:40 AM** (team starts 6:30 AM; in effect from Oct 8, 2026)
   - **Tijuana, Rosarito and everyone else:** late after **7:10 AM**
   - Admins can change these in *Admin → Settings*. Changes apply from that day forward and never rewrite earlier days.
+- **Auto clock-out:** Philippines and Egypt at **3:35 PM**, Tijuana and Rosarito at **4:00 PM** (editable in *Admin → Settings → Team schedule*).
 - **Location** comes from agent tags: `PH`, `TJ`, `EG`, `RS` (older `MX` tags count as `TJ`).
 - **Missing clock-out** = a past day that ended with the agent still on the clock or on a break.
 - Inactive agents are hidden unless asked for. They still appear in reports for days they worked.
@@ -142,7 +143,7 @@ Each agent includes:
 
 - `firstIn`, `lastOut`, `late`, `lateAfter`, `absent`, `openAtEnd`
 - `totals` (worked, break, lunch, restroom, meeting, itIssue)
-- `events`: every punch, e.g. `{ "action": "StartBreak", "time": "…", "admin_action": false, "note": "…" }`
+- `events`: every punch, e.g. `{ "action": "StartBreak", "time": "…", "admin_action": false, "note": "…" }`. `StartItIssue` events also carry `reason` (`Internet`, `Dialer`, `Headset`, `PC`, `Power outage` or `Other`) and optional `details`.
 
 ```bash
 curl -H "Authorization: Bearer $TIMECLOCK_API_KEY" "https://app.pwrhze.com/api/v1/day?date=2026-10-07"
