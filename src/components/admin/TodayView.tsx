@@ -7,6 +7,7 @@ import {
 } from '../../lib/time';
 
 interface Row {
+  lateAfter?: number;
   avatarUrl?: string | null;
   name: string;
   pin: string;
@@ -106,9 +107,12 @@ const TodayView: React.FC<{ showMessage: ShowMessage }> = ({ showMessage }) => {
       title: `${r.name}: ${STATUS_META[r.status].label.toLowerCase()} for ${fmtDuration(r.duration)}`,
       text: `Started at ${fmtClock(r.sinceMinutes)}`
     }));
-    const missing = rows.filter(r => r.status === 'notIn');
+    // Not in yet, and already past their team's late time
     const autoOut = data.autoClockOut ?? 24 * 60;
-    if (missing.length && data.nowMinutes > data.lateAfterMinutes && data.nowMinutes < autoOut) {
+    const missing = data.nowMinutes < autoOut
+      ? rows.filter(r => r.status === 'notIn' && data.nowMinutes > (r.lateAfter ?? data.lateAfterMinutes))
+      : [];
+    if (missing.length) {
       list.push({
         tone: 'slate',
         title: `${missing.length} not clocked in yet`,
@@ -172,7 +176,7 @@ const TodayView: React.FC<{ showMessage: ShowMessage }> = ({ showMessage }) => {
     { key: 'onClock', label: 'On the clock', value: counts.onClock, tone: 'green', sub: `${counts.done} done for the day` },
     { key: 'paused', label: 'On break / lunch', value: counts.paused, tone: 'amber' },
     { key: 'notIn', label: 'Not in yet', value: counts.notIn, tone: 'slate' },
-    { key: 'late', label: 'Late today', value: counts.late, tone: 'blue', sub: `after ${fmtClock(data.lateAfterMinutes)}` },
+    { key: 'late', label: 'Late today', value: counts.late, tone: 'blue', sub: 'by each team’s start time' },
     { key: 'absent', label: 'Absent', value: counts.absent, tone: 'red' },
     { key: 'all', label: 'Hours today', value: `${(counts.hours / 60).toFixed(1)}h`, tone: 'violet', sub: `${rows.length} active agents` }
   ];

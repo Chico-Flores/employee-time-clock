@@ -17,6 +17,21 @@ const THEMES = [
   }
 ];
 
+const LATE_TEAMS = [
+  { key: 'PH', label: 'Philippines' },
+  { key: 'EG', label: 'Egypt' },
+  { key: 'TJ', label: 'Tijuana' },
+  { key: 'RS', label: 'Rosarito' },
+  { key: 'default', label: 'Everyone else' }
+];
+
+// 400 <-> "06:40" for <input type="time">
+const toTimeInput = (m: number) => `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
+const fromTimeInput = (v: string) => {
+  const [h, m] = v.split(':').map(Number);
+  return Number.isInteger(h) && Number.isInteger(m) ? h * 60 + m : null;
+};
+
 interface SettingsViewProps {
   theme: string;
   onThemeChange: (theme: string) => void;
@@ -28,6 +43,43 @@ const SettingsView: React.FC<SettingsViewProps> = ({ theme, onThemeChange, showM
   const [admins, setAdmins] = useState<string[]>([]);
   const [pinAdmins, setPinAdmins] = useState<string[]>([]);
   const [showCreateAdmin, setShowCreateAdmin] = useState(false);
+  const [lateRules, setLateRules] = useState<{ [team: string]: string } | null>(null);
+  const [savedLateRules, setSavedLateRules] = useState<{ [team: string]: string } | null>(null);
+  const [savingLate, setSavingLate] = useState(false);
+
+  const applyLateRules = (rules: { [team: string]: number }) => {
+    const asInputs: { [team: string]: string } = {};
+    for (const t of LATE_TEAMS) asInputs[t.key] = toTimeInput(rules[t.key] ?? rules.default);
+    setLateRules(asInputs);
+    setSavedLateRules(asInputs);
+  };
+
+  useEffect(() => {
+    api<{ lateRules: { [team: string]: number } }>('/settings')
+      .then(d => d.lateRules && applyLateRules(d.lateRules))
+      .catch(() => setLateRules(null));
+  }, []);
+
+  const saveLateRules = async () => {
+    if (!lateRules) return;
+    const body: { [team: string]: number } = {};
+    for (const t of LATE_TEAMS) {
+      const m = fromTimeInput(lateRules[t.key]);
+      if (m === null) return showMessage(`Enter a time for ${t.label}`, 'error');
+      body[t.key] = m;
+    }
+    setSavingLate(true);
+    try {
+      const d = await api<{ lateRules: { [team: string]: number } }>('/settings', { method: 'POST', body: JSON.stringify({ lateRules: body }) });
+      applyLateRules(d.lateRules);
+      showMessage('Late times saved. They apply from today; earlier days keep their old rules.', 'success');
+    } catch (e: any) {
+      showMessage(e.message, 'error');
+    } finally {
+      setSavingLate(false);
+    }
+  };
+  const lateDirty = !!lateRules && JSON.stringify(lateRules) !== JSON.stringify(savedLateRules);
 
   const loadAdmins = () => api<any[]>('/get-users', { method: 'POST' })
     .then(users => {
@@ -97,11 +149,39 @@ const SettingsView: React.FC<SettingsViewProps> = ({ theme, onThemeChange, showM
         </div>
       </section>
 
+      <section className="card">
+        <div className="card-head">
+          <div>
+            <h2>Start times & late rules</h2>
+            <p className="muted">A first clock-in after this time is marked late. Changes apply from today; past days keep the rules they were worked under.</p>
+          </div>
+          <button className="btn btn-primary" disabled={!lateDirty || savingLate} onClick={saveLateRules}>
+            {savingLate ? 'Saving…' : 'Save'}
+          </button>
+        </div>
+        {!lateRules ? <div className="skeleton" style={{ height: 80 }} /> : (
+          <div className="late-grid">
+            {LATE_TEAMS.map(t => (
+              <label key={t.key} className="field late-field">
+                <span>{t.label}</span>
+                <input
+                  type="time"
+                  step={300}
+                  value={lateRules[t.key]}
+                  onChange={e => setLateRules({ ...lateRules, [t.key]: e.target.value })}
+                />
+                <span className="muted small">Late after {lateRules[t.key] ? new Date(`2000-01-01T${lateRules[t.key]}`).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }) : '—'} PT</span>
+              </label>
+            ))}
+          </div>
+        )}
+      </section>
+
       <div className="settings-grid">
         <section className="card">
           <div className="card-head"><h2>Auto clock-out</h2></div>
           <p>Everyone still on the clock is clocked out automatically at <strong>4:30 PM Pacific</strong> every day, with a note in Discord.</p>
-          <p className="muted small">Clock-in is open 5:45 AM – 4:00 PM Pacific. Clock-ins after 7:10 AM are marked late.</p>
+          <p className="muted small">Clock-in is open 5:45 AM – 4:00 PM Pacific.</p>
           <button className="btn btn-ghost" onClick={runAutoClockOut}>Run auto clock-out now</button>
         </section>
 
