@@ -7,6 +7,7 @@ import {
 } from '../../lib/time';
 
 interface Row {
+  avatarUrl?: string | null;
   name: string;
   pin: string;
   tags: string[];
@@ -242,7 +243,7 @@ const TodayView: React.FC<{ showMessage: ShowMessage }> = ({ showMessage }) => {
                     <tr key={r.pin} className={r.overLimit || r.staleOpen ? 'row-alert' : ''}>
                       <td>
                         <div className="agent-cell">
-                          <Avatar name={r.name} tags={r.tags} />
+                          <Avatar name={r.name} tags={r.tags} url={r.avatarUrl} />
                           <div>
                             <div className="agent-name">{r.name}</div>
                             <TagChips tags={r.tags} skipLocation />

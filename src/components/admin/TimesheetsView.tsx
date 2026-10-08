@@ -6,6 +6,7 @@ import {
 } from '../../lib/time';
 
 interface DayRow {
+  avatarUrl?: string | null;
   name: string;
   pin: string;
   tags: string[];
@@ -177,7 +178,7 @@ const TimesheetsView: React.FC<{ showMessage: ShowMessage }> = ({ showMessage })
                     <tr className="row-click" onClick={() => setExpanded(expanded === r.pin ? null : r.pin)}>
                       <td>
                         <div className="agent-cell">
-                          <Avatar name={r.name} tags={r.tags} />
+                          <Avatar name={r.name} tags={r.tags} url={r.avatarUrl} />
                           <div>
                             <div className="agent-name">{r.name}</div>
                             <TagChips tags={r.tags} />

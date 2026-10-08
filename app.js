@@ -24,6 +24,11 @@ const ABSENCE_WEBHOOK_URL = process.env.ABSENCE_WEBHOOK_URL;
 const CRON_SECRET = process.env.CRON_SECRET;
 const MONGODB_URI = process.env.MONGODB_URI;
 const DB_NAME = 'timeclock';
+// Read-only API key for the stats bot / integrations (Authorization: Bearer <key>)
+const API_KEY = process.env.TIMECLOCK_API_KEY;
+// Public base URL, used for avatar links in Discord. Falls back to the last request's origin.
+const PUBLIC_URL = (process.env.PUBLIC_URL || '').replace(/\/$/, '');
+let lastSeenOrigin = '';
 
 if (!MONGODB_URI) {
     console.error('❌ MONGODB_URI environment variable is required');
@@ -63,7 +68,11 @@ const corsOptions = {
 };
 app.set('trust proxy', 1); // Render sits behind a proxy; needed for real client IPs
 app.use(cors(corsOptions));
-app.use(bodyParser.json());
+app.use(bodyParser.json({ limit: '1mb' })); // avatar uploads are ~30-150KB as base64
+app.use((req, res, next) => {
+    if (!PUBLIC_URL && req.get('host')) lastSeenOrigin = `${req.protocol}://${req.get('host')}`;
+    next();
+});
 app.use(express.static(path.join(__dirname, 'dist')));
 
 // Use session middleware with MongoDB store - MUST come after CORS
@@ -114,6 +123,93 @@ async function getLastRecord(db, pin) {
     return db.collection('records').findOne({ pin }, { sort: { _id: -1 } });
 }
 
+// ---------- Avatars ----------
+// Stored in the `avatars` collection under a random id (never the PIN), served at /avatars/<id>.jpg
+
+const AVATAR_TYPES = { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp' };
+const MAX_AVATAR_BYTES = 400 * 1024;
+
+function avatarPath(user) {
+    return user && user.avatarId ? `/avatars/${user.avatarId}?v=${user.avatarVersion || 1}` : null;
+}
+
+function avatarAbsoluteUrl(user) {
+    const path = avatarPath(user);
+    const base = PUBLIC_URL || lastSeenOrigin;
+    return path && base ? base + path : null;
+}
+
+function parseImageDataUrl(dataUrl) {
+    const m = /^data:(image\/(?:jpeg|png|webp));base64,([A-Za-z0-9+/=]+)$/.exec(dataUrl || '');
+    if (!m) return null;
+    const buffer = Buffer.from(m[2], 'base64');
+    if (!buffer.length || buffer.length > MAX_AVATAR_BYTES) return null;
+    return { contentType: m[1], buffer };
+}
+
+async function saveAvatar(db, user, dataUrl) {
+    const image = parseImageDataUrl(dataUrl);
+    if (!image) {
+        const err = new Error('Please upload a JPG, PNG or WebP image under 400KB');
+        err.status = 400;
+        throw err;
+    }
+    const avatarId = user.avatarId || crypto.randomBytes(12).toString('hex');
+    await db.collection('avatars').updateOne(
+        { _id: avatarId },
+        { $set: { data: image.buffer, contentType: image.contentType, updatedAt: new Date() } },
+        { upsert: true }
+    );
+    const avatarVersion = (user.avatarVersion || 0) + 1;
+    await db.collection('users').updateOne({ _id: user._id }, { $set: { avatarId, avatarVersion } });
+    return avatarPath({ avatarId, avatarVersion });
+}
+
+async function removeAvatar(db, user) {
+    if (user.avatarId) await db.collection('avatars').deleteOne({ _id: user.avatarId });
+    await db.collection('users').updateOne({ _id: user._id }, { $unset: { avatarId: '', avatarVersion: '' } });
+}
+
+// ---------- PIN guessing protection ----------
+// Too many unknown-PIN attempts from one IP within 10 minutes -> temporary block
+const PIN_FAIL_LIMIT = 40;
+const PIN_FAIL_WINDOW_MS = 10 * 60 * 1000;
+const pinFailures = new Map();
+
+function pinBlocked(req) {
+    const entry = pinFailures.get(getClientIp(req));
+    return !!(entry && entry.count >= PIN_FAIL_LIMIT && Date.now() - entry.first < PIN_FAIL_WINDOW_MS);
+}
+
+function notePinFailure(req) {
+    const ip = getClientIp(req);
+    const entry = pinFailures.get(ip);
+    if (!entry || Date.now() - entry.first >= PIN_FAIL_WINDOW_MS) pinFailures.set(ip, { count: 1, first: Date.now() });
+    else entry.count++;
+    if (pinFailures.size > 5000) pinFailures.clear();
+}
+
+const PIN_BLOCKED_MESSAGE = 'Too many incorrect PIN attempts. Please wait a few minutes and try again.';
+
+// Look up an active employee by PIN for agent self-service routes
+async function findAgentByPin(req, res) {
+    if (pinBlocked(req)) {
+        res.status(429).json({ error: PIN_BLOCKED_MESSAGE });
+        return null;
+    }
+    const user = await getDB().collection('users').findOne({ pin: req.body.pin });
+    if (!user || user.username) {
+        notePinFailure(req);
+        res.status(404).json({ error: 'No user with this PIN' });
+        return null;
+    }
+    if (user.active === false) {
+        res.status(403).json({ error: 'This PIN is inactive. Please contact your team lead.', inactive: true });
+        return null;
+    }
+    return user;
+}
+
 // ---------- Time sheet helpers ----------
 // Records store time as a PST wall-clock string: "MM/DD/YYYY, hh:mm:ss AM"
 
@@ -146,6 +242,18 @@ function dateKeysInRange(startIso, endIso) {
         keys.push(isoToDateKey(d.toISOString().slice(0, 10)));
     }
     return keys.length > 93 ? null : keys;
+}
+
+function todayIsoPst() {
+    const p = parseRecordTime(getPSTTime());
+    const [m, d, y] = p.dateKey.split('/');
+    return `${y}-${m}-${d}`;
+}
+
+function shiftIsoDays(iso, days) {
+    const d = new Date(`${iso}T12:00:00Z`);
+    d.setUTCDate(d.getUTCDate() + days);
+    return d.toISOString().slice(0, 10);
 }
 
 function dateKeyRegex(dateKey) {
@@ -231,7 +339,10 @@ function getPSTTime() {
 }
 
 // Function to send Discord notification
-async function sendDiscordNotification(name, action, time, isAdminAction = false, note = '') {
+// `who` is the employee document (name, avatar, Discord id, tags) or just a name
+async function sendDiscordNotification(who, action, time, isAdminAction = false, note = '') {
+    const user = typeof who === 'string' ? { name: who } : who;
+    const name = user.name;
     if (!DISCORD_WEBHOOK_URL) {
         console.log('Discord webhook not configured, skipping notification');
         return;
@@ -256,6 +367,7 @@ async function sendDiscordNotification(name, action, time, isAdminAction = false
 
     let title = `${config.emoji} ${name} ${config.text}`;
     let description = `**Time (PST):** ${time}`;
+    if (user.discordId) description += `\n**Discord:** <@${user.discordId}>`;
 
     // Add admin indicator and note if this was an admin action
     if (isAdminAction) {
@@ -265,16 +377,30 @@ async function sendDiscordNotification(name, action, time, isAdminAction = false
         }
     }
 
+    const avatarUrl = avatarAbsoluteUrl(user);
+    const tags = user.tags || [];
+    const location = ['PH', 'TJ', 'EG', 'RS'].find(t => tags.includes(t));
+    const role = ['Team Lead', 'Closer', 'Jr Closer', 'Dialer', 'Admin'].filter(t => tags.includes(t)).join(' · ');
+    const subtitle = [location, role].filter(Boolean).join(' · ');
+
+    const embed = {
+        title: title,
+        description: description,
+        color: config.color,
+        timestamp: new Date().toISOString(),
+        footer: {
+            text: 'Employee Time Clock (PST)'
+        }
+    };
+    if (avatarUrl || subtitle) {
+        embed.author = { name: subtitle ? `${name} · ${subtitle}` : name };
+        if (avatarUrl) embed.author.icon_url = avatarUrl;
+    }
+    if (avatarUrl) embed.thumbnail = { url: avatarUrl };
+
     const discordMessage = {
-        embeds: [{
-            title: title,
-            description: description,
-            color: config.color,
-            timestamp: new Date().toISOString(),
-            footer: {
-                text: 'Employee Time Clock (PST)'
-            }
-        }]
+        embeds: [embed],
+        allowed_mentions: { parse: [] } // show Discord names without pinging anyone
     };
 
     try {
@@ -380,7 +506,8 @@ async function performAutoClockOut() {
                     note
                 });
 
-                await sendDiscordNotification(employee.name, 'ClockOut', currentTime, true, note);
+                const user = await db.collection('users').findOne({ pin: employee.pin });
+                await sendDiscordNotification(user || employee.name, 'ClockOut', currentTime, true, note);
 
                 console.log(`✅ Auto clocked out: ${employee.name}`);
             } catch (error) {
@@ -433,7 +560,7 @@ app.post('/get-users', requireAdmin, async (req, res) => {
     try {
         const db = getDB();
         const users = await db.collection('users').find({}, USER_PROJECTION).toArray();
-        res.json(users);
+        res.json(users.map(u => ({ ...u, avatarUrl: avatarPath(u) })));
     } catch (error) {
         res.status(500).json({ error: error.message });
     }
@@ -454,12 +581,14 @@ app.get('/has-users', async (req, res) => {
 // downloading every record
 app.post('/employee-status', async (req, res) => {
     const { pin } = req.body;
+    if (pinBlocked(req)) return res.status(429).json({ error: PIN_BLOCKED_MESSAGE });
 
     try {
         const db = getDB();
         const user = await db.collection('users').findOne({ pin }, USER_PROJECTION);
 
         if (!user || user.username) {
+            notePinFailure(req);
             return res.status(404).json({ error: 'No user with this PIN' });
         }
         if (user.active === false) {
@@ -475,7 +604,9 @@ app.post('/employee-status', async (req, res) => {
             name: user.name,
             action: lastRecord ? lastRecord.action : null,
             time: lastRecord ? lastRecord.time : null,
-            today: { firstIn: day.firstIn, worked: day.totals.worked, late: day.late }
+            today: { firstIn: day.firstIn, worked: day.totals.worked, late: day.late },
+            avatarUrl: avatarPath(user),
+            themePref: user.themePref || null
         });
     } catch (error) {
         res.status(500).json({ error: error.message });
@@ -518,12 +649,14 @@ app.post('/add-record', async (req, res) => {
     if (!VALID_TRANSITIONS[action]) {
         return res.status(400).json({ error: 'Invalid action' });
     }
+    if (pinBlocked(req)) return res.status(429).json({ error: PIN_BLOCKED_MESSAGE });
 
     try {
         const db = getDB();
         const user = await db.collection('users').findOne({ pin });
         
         if (!user || user.username) {
+            notePinFailure(req);
             return res.status(400).json({ error: 'No user with this PIN' });
         }
         if (user.active === false) {
@@ -554,7 +687,7 @@ app.post('/add-record', async (req, res) => {
         });
 
         // Send Discord notification (non-blocking)
-        sendDiscordNotification(name, action, time).catch(console.error);
+        sendDiscordNotification(user, action, time).catch(console.error);
 
         res.status(201).json({ id: result.insertedId, name, time, ip });
     } catch (error) {
@@ -594,7 +727,7 @@ app.post('/manual-clock-out', requireAdmin, async (req, res) => {
         const result = await db.collection('records').insertOne(recordData);
 
         // Send Discord notification with admin flag
-        sendDiscordNotification(name, 'ClockOut', time, true, note).catch(console.error);
+        sendDiscordNotification(user, 'ClockOut', time, true, note).catch(console.error);
 
         res.status(201).json({ id: result.insertedId, name });
     } catch (error) {
@@ -701,6 +834,7 @@ app.post('/login', async (req, res) => {
 // NEW ROUTE: Quick admin login using PIN for employees with "Admin" tag
 app.post('/quick-admin-login', async (req, res) => {
     const { pin } = req.body;
+    if (pinBlocked(req)) return res.status(429).json({ error: PIN_BLOCKED_MESSAGE });
     
     try {
         const db = getDB();
@@ -709,6 +843,7 @@ app.post('/quick-admin-login', async (req, res) => {
         const employee = await db.collection('users').findOne({ pin });
         
         if (!employee || employee.active === false) {
+            notePinFailure(req);
             return res.status(401).json({ error: 'Invalid PIN' });
         }
         
@@ -961,6 +1096,101 @@ app.post('/test-auto-clockout', requireAdmin, async (req, res) => {
     }
 });
 
+// ---------- Agent self-service (identified by PIN) ----------
+
+app.post('/me/avatar', async (req, res) => {
+    try {
+        const user = await findAgentByPin(req, res);
+        if (!user) return;
+        const avatarUrl = await saveAvatar(getDB(), user, req.body.image);
+        res.json({ avatarUrl });
+    } catch (error) {
+        res.status(error.status || 500).json({ error: error.message });
+    }
+});
+
+app.post('/me/avatar/remove', async (req, res) => {
+    try {
+        const user = await findAgentByPin(req, res);
+        if (!user) return;
+        await removeAvatar(getDB(), user);
+        res.json({ avatarUrl: null });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// themePref: 'auto' follows the holiday theme admins pick, 'classic' always shows the standard look
+app.post('/me/preferences', async (req, res) => {
+    const { themePref } = req.body;
+    if (!['auto', 'classic'].includes(themePref)) {
+        return res.status(400).json({ error: 'themePref must be auto or classic' });
+    }
+    try {
+        const user = await findAgentByPin(req, res);
+        if (!user) return;
+        await getDB().collection('users').updateOne({ _id: user._id }, { $set: { themePref } });
+        res.json({ themePref });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// ---------- Admin: agent profile ----------
+
+async function findEmployeeForAdmin(pin, res) {
+    const user = await getDB().collection('users').findOne({ pin, username: { $exists: false } });
+    if (!user) res.status(404).json({ error: 'Employee not found' });
+    return user;
+}
+
+app.post('/admin/agent-avatar', requireAdmin, async (req, res) => {
+    try {
+        const user = await findEmployeeForAdmin(req.body.pin, res);
+        if (!user) return;
+        if (req.body.remove) {
+            await removeAvatar(getDB(), user);
+            return res.json({ avatarUrl: null });
+        }
+        res.json({ avatarUrl: await saveAvatar(getDB(), user, req.body.image) });
+    } catch (error) {
+        res.status(error.status || 500).json({ error: error.message });
+    }
+});
+
+// Optional Discord user id (numeric "snowflake") so notifications and the stats bot can link agents
+app.post('/admin/agent-profile', requireAdmin, async (req, res) => {
+    const discordId = String(req.body.discordId || '').trim();
+    if (discordId && !/^\d{15,21}$/.test(discordId)) {
+        return res.status(400).json({ error: 'Discord ID should be the 17-20 digit number from "Copy User ID" in Discord' });
+    }
+    try {
+        const user = await findEmployeeForAdmin(req.body.pin, res);
+        if (!user) return;
+        await getDB().collection('users').updateOne(
+            { _id: user._id },
+            discordId ? { $set: { discordId } } : { $unset: { discordId: '' } }
+        );
+        res.json({ discordId: discordId || null });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Public avatar images (random ids, needed by Discord to render them)
+app.get('/avatars/:id', async (req, res) => {
+    if (!/^[a-f0-9]{24}$/.test(req.params.id)) return res.status(404).end();
+    try {
+        const doc = await getDB().collection('avatars').findOne({ _id: req.params.id });
+        if (!doc) return res.status(404).end();
+        res.set('Content-Type', doc.contentType);
+        res.set('Cache-Control', 'public, max-age=31536000, immutable'); // URLs carry ?v=<version>
+        res.send(doc.data.buffer ? Buffer.from(doc.data.buffer) : doc.data);
+    } catch (error) {
+        res.status(500).end();
+    }
+});
+
 // ---------- Settings (holiday theme) ----------
 const THEMES = ['default', 'halloween'];
 
@@ -986,123 +1216,213 @@ app.post('/settings', requireAdmin, async (req, res) => {
     }
 });
 
-// ---------- Admin reports ----------
+// ---------- Reports (admin portal + stats API) ----------
+
+const EMPLOYEE_FIELDS = { projection: { name: 1, pin: 1, tags: 1, active: 1, avatarId: 1, avatarVersion: 1, discordId: 1 } };
+const LOCATION_TAGS = ['PH', 'TJ', 'EG', 'RS'];
+
+function employeeInfo(e) {
+    const tags = e.tags || [];
+    return {
+        name: e.name,
+        pin: e.pin,
+        tags,
+        location: LOCATION_TAGS.find(t => tags.includes(t)) || (tags.includes('MX') ? 'TJ' : null),
+        active: e.active !== false,
+        avatarUrl: avatarPath(e),
+        discordId: e.discordId || null
+    };
+}
 
 // One day's summary for every active employee (plus anyone inactive who has
 // records that day). endMinutes is "now" when dateKey is today.
 async function buildDay(db, dateKey, endMinutes) {
     const [employees, records] = await Promise.all([
-        db.collection('users').find({ username: { $exists: false } }, { projection: { name: 1, pin: 1, tags: 1, active: 1 } }).toArray(),
+        db.collection('users').find({ username: { $exists: false } }, EMPLOYEE_FIELDS).toArray(),
         db.collection('records').find({ time: dateKeyRegex(dateKey) }).sort({ _id: 1 }).toArray()
     ]);
     const byPin = groupByPin(records);
     const rows = employees
         .filter(e => e.active !== false || byPin[e.pin])
         .map(e => ({
-            name: e.name,
-            pin: e.pin,
-            tags: e.tags || [],
-            active: e.active !== false,
+            ...employeeInfo(e),
             ...summarizeDay(byPin[e.pin] || [], endMinutes),
             events: (byPin[e.pin] || []).map(publicRecord)
         }));
     return { rows, records };
 }
 
-// Live view for the admin "Today" screen
-app.get('/admin/overview', requireAdmin, async (req, res) => {
-    try {
-        const db = getDB();
-        const now = getPSTTime();
-        const nowParsed = parseRecordTime(now);
-        const { rows, records } = await buildDay(db, nowParsed.dateKey, nowParsed.minutes);
+async function getOverview() {
+    const db = getDB();
+    const now = getPSTTime();
+    const nowParsed = parseRecordTime(now);
+    const { rows, records } = await buildDay(db, nowParsed.dateKey, nowParsed.minutes);
 
-        // Current status comes from each employee's latest record (may be from an earlier day)
-        const latest = await Promise.all(rows.map(r => getLastRecord(db, r.pin)));
-        rows.forEach((r, i) => {
-            const last = latest[i];
-            const parsed = last ? parseRecordTime(last.time) : null;
-            r.lastAction = last ? last.action : null;
-            r.lastTime = last ? last.time : null;
-            r.sinceMinutes = parsed && parsed.dateKey === nowParsed.dateKey ? Math.round(parsed.minutes) : null;
-            r.staleOpen = !!(last && parsed && parsed.dateKey !== nowParsed.dateKey && last.action !== 'ClockOut' && last.action !== 'Absent');
-            delete r.events;
-        });
+    // Current status comes from each employee's latest record (may be from an earlier day)
+    const latest = await Promise.all(rows.map(r => getLastRecord(db, r.pin)));
+    rows.forEach((r, i) => {
+        const last = latest[i];
+        const parsed = last ? parseRecordTime(last.time) : null;
+        r.lastAction = last ? last.action : null;
+        r.lastTime = last ? last.time : null;
+        r.sinceMinutes = parsed && parsed.dateKey === nowParsed.dateKey ? Math.round(parsed.minutes) : null;
+        r.staleOpen = !!(last && parsed && parsed.dateKey !== nowParsed.dateKey && last.action !== 'ClockOut' && last.action !== 'Absent');
+        delete r.events;
+    });
 
-        res.json({
-            now,
-            nowMinutes: Math.round(nowParsed.minutes),
-            lateAfterMinutes: LATE_AFTER_MINUTES,
-            autoClockOut: AUTO_CLOCKOUT_ENABLED ? AUTO_CLOCKOUT_HOUR * 60 + AUTO_CLOCKOUT_MINUTE : null,
-            employees: rows.filter(r => r.active),
-            activity: records.slice(-40).reverse().map(publicRecord)
-        });
-    } catch (error) {
-        res.status(500).json({ error: error.message });
+    return {
+        now,
+        nowMinutes: Math.round(nowParsed.minutes),
+        lateAfterMinutes: LATE_AFTER_MINUTES,
+        autoClockOut: AUTO_CLOCKOUT_ENABLED ? AUTO_CLOCKOUT_HOUR * 60 + AUTO_CLOCKOUT_MINUTE : null,
+        employees: rows.filter(r => r.active),
+        activity: records.slice(-40).reverse().map(publicRecord)
+    };
+}
+
+async function getDay(dateKey) {
+    const nowParsed = parseRecordTime(getPSTTime());
+    const endMinutes = dateKey === nowParsed.dateKey ? nowParsed.minutes : null;
+    const { rows } = await buildDay(getDB(), dateKey, endMinutes);
+    return { date: dateKey, employees: rows };
+}
+
+// Totals per employee over a list of date keys; with perDay, also each day's summary
+async function getHours(keys, { pins = null, perDay = false } = {}) {
+    const db = getDB();
+    const nowParsed = parseRecordTime(getPSTTime());
+    const userFilter = { username: { $exists: false }, ...(pins ? { pin: { $in: pins } } : {}) };
+    const recordFilter = { time: { $in: keys.map(dateKeyRegex) }, ...(pins ? { pin: { $in: pins } } : {}) };
+    const [employees, records] = await Promise.all([
+        db.collection('users').find(userFilter, EMPLOYEE_FIELDS).toArray(),
+        db.collection('records').find(recordFilter).sort({ _id: 1 }).toArray()
+    ]);
+
+    const byPinDay = {};
+    for (const r of records) {
+        const t = parseRecordTime(r.time);
+        if (!t) continue;
+        const k = r.pin + '|' + t.dateKey;
+        (byPinDay[k] = byPinDay[k] || []).push(r);
     }
-});
 
-// Timesheet for one day: ?date=YYYY-MM-DD
-app.get('/admin/day', requireAdmin, async (req, res) => {
-    const dateKey = isoToDateKey(req.query.date);
-    if (!dateKey) return res.status(400).json({ error: 'date must be YYYY-MM-DD' });
-    try {
-        const nowParsed = parseRecordTime(getPSTTime());
-        const endMinutes = dateKey === nowParsed.dateKey ? nowParsed.minutes : null;
-        const { rows } = await buildDay(getDB(), dateKey, endMinutes);
-        res.json({ date: dateKey, employees: rows });
-    } catch (error) {
-        res.status(500).json({ error: error.message });
-    }
-});
-
-// Hours per employee over a date range: ?start=YYYY-MM-DD&end=YYYY-MM-DD
-app.get('/admin/hours', requireAdmin, async (req, res) => {
-    const keys = dateKeysInRange(req.query.start, req.query.end);
-    if (!keys) return res.status(400).json({ error: 'Invalid date range (max 93 days)' });
-    try {
-        const db = getDB();
-        const nowParsed = parseRecordTime(getPSTTime());
-        const [employees, records] = await Promise.all([
-            db.collection('users').find({ username: { $exists: false } }, { projection: { name: 1, pin: 1, tags: 1, active: 1 } }).toArray(),
-            db.collection('records').find({ time: { $in: keys.map(dateKeyRegex) } }).sort({ _id: 1 }).toArray()
-        ]);
-
-        const byPinDay = {};
-        for (const r of records) {
-            const t = parseRecordTime(r.time);
-            if (!t) continue;
-            const k = r.pin + '|' + t.dateKey;
-            (byPinDay[k] = byPinDay[k] || []).push(r);
+    const rows = employees.map(e => {
+        const row = { ...employeeInfo(e),
+            daysWorked: 0, workedMinutes: 0, breakMinutes: 0, lunchMinutes: 0, lateDays: 0, absentDays: 0, missingClockOuts: 0 };
+        if (perDay) row.days = [];
+        for (const key of keys) {
+            const events = byPinDay[e.pin + '|' + key];
+            if (!events) continue;
+            const day = summarizeDay(events, key === nowParsed.dateKey ? nowParsed.minutes : null);
+            if (day.absent) row.absentDays++;
+            if (day.firstIn !== null) row.daysWorked++;
+            if (day.late) row.lateDays++;
+            if (day.openAtEnd && key !== nowParsed.dateKey) row.missingClockOuts++;
+            row.workedMinutes += day.totals.worked;
+            row.breakMinutes += day.totals.break + day.totals.restroom;
+            row.lunchMinutes += day.totals.lunch;
+            if (perDay) row.days.push({ date: key, ...day });
         }
+        return row;
+    }).filter(r => pins || r.active || r.daysWorked || r.absentDays);
 
-        const rows = employees.map(e => {
-            const row = { name: e.name, pin: e.pin, tags: e.tags || [], active: e.active !== false,
-                daysWorked: 0, workedMinutes: 0, breakMinutes: 0, lunchMinutes: 0, lateDays: 0, absentDays: 0, missingClockOuts: 0 };
-            for (const key of keys) {
-                const events = byPinDay[e.pin + '|' + key];
-                if (!events) continue;
-                const day = summarizeDay(events, key === nowParsed.dateKey ? nowParsed.minutes : null);
-                if (day.absent) row.absentDays++;
-                if (day.firstIn !== null) row.daysWorked++;
-                if (day.late) row.lateDays++;
-                if (day.openAtEnd && key !== nowParsed.dateKey) row.missingClockOuts++;
-                row.workedMinutes += day.totals.worked;
-                row.breakMinutes += day.totals.break + day.totals.restroom;
-                row.lunchMinutes += day.totals.lunch;
-            }
-            return row;
-        }).filter(r => r.active || r.daysWorked || r.absentDays);
+    return { start: keys[0], end: keys[keys.length - 1], days: keys.length, employees: rows };
+}
 
-        res.json({ start: keys[0], end: keys[keys.length - 1], days: keys.length, employees: rows });
+const handle = (fn) => async (req, res) => {
+    try {
+        await fn(req, res);
     } catch (error) {
-        res.status(500).json({ error: error.message });
+        res.status(error.status || 500).json({ error: error.message });
     }
-});
+};
 
-// Scheduled auto clock-out, called by GitHub Actions (see .github/workflows/auto-clockout.yml).
-// The workflow runs at two UTC times to cover daylight saving; calls before the
-// configured PST time are ignored.
+const badRequest = (message) => Object.assign(new Error(message), { status: 400 });
+
+function rangeKeys(query) {
+    const keys = dateKeysInRange(query.start, query.end || query.start);
+    if (!keys) throw badRequest('start/end must be YYYY-MM-DD, at most 93 days apart');
+    return keys;
+}
+
+// Admin portal
+app.get('/admin/overview', requireAdmin, handle(async (req, res) => res.json(await getOverview())));
+
+app.get('/admin/day', requireAdmin, handle(async (req, res) => {
+    const dateKey = isoToDateKey(req.query.date);
+    if (!dateKey) throw badRequest('date must be YYYY-MM-DD');
+    res.json(await getDay(dateKey));
+}));
+
+app.get('/admin/hours', requireAdmin, handle(async (req, res) => res.json(await getHours(rangeKeys(req.query)))));
+
+// ---------- Read-only stats API (Authorization: Bearer <TIMECLOCK_API_KEY>) ----------
+// See docs/API.md. Responses never include PINs.
+
+function requireApiKey(req, res, next) {
+    const header = req.get('authorization') || '';
+    const token = header.startsWith('Bearer ') ? header.slice(7) : (req.get('x-api-key') || '');
+    if (!API_KEY) return res.status(503).json({ error: 'API is not enabled (TIMECLOCK_API_KEY not set)' });
+    const a = Buffer.from(token), b = Buffer.from(API_KEY);
+    if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) return res.status(401).json({ error: 'Invalid API key' });
+    next();
+}
+
+// Deep copy without PINs; avatar paths become absolute URLs
+function forApi(value) {
+    if (Array.isArray(value)) return value.map(forApi);
+    if (value && typeof value === 'object' && !(value instanceof Date)) {
+        const out = {};
+        for (const [k, v] of Object.entries(value)) {
+            if (k === 'pin') continue;
+            out[k] = k === 'avatarUrl' && v ? (PUBLIC_URL || lastSeenOrigin) + v : forApi(v);
+        }
+        return out;
+    }
+    return value;
+}
+
+const apiJson = (res, data) => res.json(forApi(data));
+
+app.use('/api/v1', cors({ origin: true, credentials: false }), requireApiKey);
+
+app.get('/api/v1/status', handle(async (req, res) => apiJson(res, await getOverview())));
+
+app.get('/api/v1/agents', handle(async (req, res) => {
+    const users = await getDB().collection('users').find({ username: { $exists: false } }, EMPLOYEE_FIELDS).toArray();
+    const includeInactive = req.query.includeInactive === 'true';
+    apiJson(res, { agents: users.map(employeeInfo).filter(a => includeInactive || a.active).sort((a, b) => a.name.localeCompare(b.name)) });
+}));
+
+app.get('/api/v1/day', handle(async (req, res) => {
+    const dateKey = isoToDateKey(req.query.date || todayIsoPst());
+    if (!dateKey) throw badRequest('date must be YYYY-MM-DD');
+    apiJson(res, await getDay(dateKey));
+}));
+
+app.get('/api/v1/hours', handle(async (req, res) => apiJson(res, await getHours(rangeKeys(req.query)))));
+
+// One agent by name (case-insensitive), with a day-by-day breakdown
+app.get('/api/v1/agents/:name', handle(async (req, res) => {
+    const name = String(req.params.name).trim();
+    const user = await getDB().collection('users').findOne(
+        { username: { $exists: false }, name: new RegExp(`^${name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') },
+        EMPLOYEE_FIELDS
+    );
+    if (!user) return res.status(404).json({ error: `No agent named ${name}` });
+    const today = todayIsoPst();
+    const keys = rangeKeys({ start: req.query.start || shiftIsoDays(today, -6), end: req.query.end || today });
+    const [hours, last] = await Promise.all([getHours(keys, { pins: [user.pin], perDay: true }), getLastRecord(getDB(), user.pin)]);
+    apiJson(res, {
+        ...hours.employees[0],
+        start: hours.start,
+        end: hours.end,
+        currentStatus: last ? { action: last.action, since: last.time } : null
+    });
+}));
+
+// Auto clock-out trigger for an external scheduler (only needed if the server can sleep).
+// Calls before the configured PST time are ignored.
 app.post('/cron/auto-clockout', async (req, res) => {
     if (!CRON_SECRET || req.get('x-cron-secret') !== CRON_SECRET) {
         return res.status(401).json({ error: 'Unauthorized' });
