@@ -55,6 +55,15 @@ const END_ACTION: { [start: string]: { action: string; label: string } } = {
   StartMeeting: { action: 'EndMeeting', label: '✅ End meeting' }
 };
 
+const IT_REASONS = [
+  { value: 'Internet', icon: '📶' },
+  { value: 'Dialer', icon: '☎️' },
+  { value: 'Headset', icon: '🎧' },
+  { value: 'PC', icon: '🖥️' },
+  { value: 'Power outage', icon: '🔌' },
+  { value: 'Other', icon: '❓' }
+];
+
 const SECONDARY_ACTIONS = [
   { action: 'StartBreak', label: 'Break', icon: '☕' },
   { action: 'StartLunch', label: 'Lunch', icon: '🍔' },
@@ -109,6 +118,9 @@ const Kiosk: React.FC<KioskProps> = ({ theme, siteTheme, themePref, onThemePrefC
   const [clock, setClock] = useState(pstNow());
   const [shake, setShake] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [itPicker, setItPicker] = useState(false);
+  const [itReason, setItReason] = useState('');
+  const [itDetails, setItDetails] = useState('');
   const containerRef = useRef<HTMLDivElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const themePrefRef = useRef(themePref);
@@ -264,7 +276,19 @@ const Kiosk: React.FC<KioskProps> = ({ theme, siteTheme, themePref, onThemePrefC
   const isPaused = !!(employee?.action && END_ACTION[employee.action]);
   const canClockIn = !employee?.action || employee.action === 'ClockOut' || employee.action === 'Absent';
 
-  const record = async (action: string) => {
+  const record = async (action: string, extra: { reason?: string; details?: string } = {}) => {
+    // IT issues ask what's wrong first
+    if (action === 'StartItIssue' && !extra.reason) {
+      if (!employee || busy) return;
+      if (!VALID_AFTER[action]?.includes(employee.action)) {
+        showMessage(`You can't do that right now (current status: ${STATUS_META[status].label}).`, 'error');
+        return;
+      }
+      setItReason('');
+      setItDetails('');
+      setItPicker(true);
+      return;
+    }
     if (!employee || busy) {
       if (pin.length < 4) triggerShake();
       return;
@@ -297,7 +321,7 @@ const Kiosk: React.FC<KioskProps> = ({ theme, siteTheme, themePref, onThemePrefC
       const response = await fetch('/add-record', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ pin, action })
+        body: JSON.stringify({ pin, action, ...extra })
       });
       const data = await response.json();
       if (!response.ok) {
@@ -331,6 +355,10 @@ const Kiosk: React.FC<KioskProps> = ({ theme, siteTheme, themePref, onThemePrefC
     if (e.ctrlKey || e.metaKey || e.altKey) return;
     if (['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName) || document.querySelector('.login-overlay')) return;
     if (e.key === 'Enter' && target.tagName === 'BUTTON') return; // the button handles it
+    if (itPicker) {
+      if (e.key === 'Escape') setItPicker(false);
+      return;
+    }
     if (/^[0-9]$/.test(e.key)) pressKey(e.key);
     else if (e.key === 'Backspace' || e.key === 'Delete') backspace();
     else if (e.key === 'Escape') clearPin();
@@ -542,6 +570,46 @@ const Kiosk: React.FC<KioskProps> = ({ theme, siteTheme, themePref, onThemePrefC
           {isAdmin ? '← Back to admin portal' : '🔒 Admin'}
         </button>
       </footer>
+
+      {itPicker && employee && (
+        <div className="it-picker-backdrop" onMouseDown={(e) => e.target === e.currentTarget && setItPicker(false)}>
+          <div className="it-picker" role="dialog" aria-modal="true" aria-label="What is the IT issue?">
+            <h3>💻 What's the IT issue?</h3>
+            <p>Your team lead will see this.</p>
+            <div className="it-reasons">
+              {IT_REASONS.map(r => (
+                <button
+                  key={r.value}
+                  type="button"
+                  className={`it-reason ${itReason === r.value ? 'selected' : ''}`}
+                  onClick={() => setItReason(r.value)}
+                >
+                  <span className="it-reason-icon">{r.icon}</span>
+                  {r.value}
+                </button>
+              ))}
+            </div>
+            <input
+              className="it-details"
+              maxLength={200}
+              value={itDetails}
+              onChange={(e) => setItDetails(e.target.value)}
+              placeholder={itReason === 'Other' ? 'Describe the issue (required)' : 'Add details (optional)'}
+            />
+            <div className="it-picker-actions">
+              <button type="button" className="kiosk-link" onClick={() => setItPicker(false)}>Cancel</button>
+              <button
+                type="button"
+                className="kiosk-primary"
+                disabled={!itReason || (itReason === 'Other' && !itDetails.trim()) || busy}
+                onClick={() => { setItPicker(false); record('StartItIssue', { reason: itReason, details: itDetails.trim() || undefined }); }}
+              >
+                Report IT issue
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {!isAdmin && <PWAInstaller />}
     </div>

@@ -17,7 +17,7 @@ interface DayRow {
   absent: boolean;
   openAtEnd: boolean;
   totals: { worked: number; break: number; lunch: number; restroom: number; meeting: number; itIssue: number };
-  events: { action: string; time: string; admin_action: boolean; note?: string }[];
+  events: { action: string; time: string; admin_action: boolean; note?: string; reason?: string; details?: string }[];
 }
 
 type SegmentType = 'work' | 'break' | 'lunch' | 'restroom' | 'meeting' | 'itIssue';
@@ -212,7 +212,8 @@ const TimesheetsView: React.FC<{ showMessage: ShowMessage }> = ({ showMessage })
                                 <span className="event-time">{fmtClock(parseRecordTime(e.time)?.minutes)}</span>
                                 <span>{ACTION_LABELS[e.action] || e.action}</span>
                                 {e.admin_action && <span className="badge">admin</span>}
-                                {e.note && <span className="muted small">{e.note}</span>}
+                                {e.reason && <span className="badge badge-absent">{e.reason}</span>}
+                                {(e.details || e.note) && <span className="muted small">{e.details || e.note}</span>}
                               </li>
                             ))}
                           </ol>

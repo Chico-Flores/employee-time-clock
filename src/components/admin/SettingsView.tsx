@@ -43,43 +43,97 @@ const SettingsView: React.FC<SettingsViewProps> = ({ theme, onThemeChange, showM
   const [admins, setAdmins] = useState<string[]>([]);
   const [pinAdmins, setPinAdmins] = useState<string[]>([]);
   const [showCreateAdmin, setShowCreateAdmin] = useState(false);
-  const [lateRules, setLateRules] = useState<{ [team: string]: string } | null>(null);
-  const [savedLateRules, setSavedLateRules] = useState<{ [team: string]: string } | null>(null);
-  const [savingLate, setSavingLate] = useState(false);
+  type TeamTimes = { [team: string]: string };
+  interface ScheduleForm { late: TeamTimes; auto: TeamTimes; noshow: TeamTimes; limits: { [k: string]: string } }
+  const [form, setForm] = useState<ScheduleForm | null>(null);
+  const [savedForm, setSavedForm] = useState<ScheduleForm | null>(null);
+  const [savingSchedule, setSavingSchedule] = useState(false);
+  const [alertsConnected, setAlertsConnected] = useState(false);
+  const [webhookInput, setWebhookInput] = useState('');
+  const [webhookBusy, setWebhookBusy] = useState(false);
 
-  const applyLateRules = (rules: { [team: string]: number }) => {
-    const asInputs: { [team: string]: string } = {};
-    for (const t of LATE_TEAMS) asInputs[t.key] = toTimeInput(rules[t.key] ?? rules.default);
-    setLateRules(asInputs);
-    setSavedLateRules(asInputs);
+  const applySettings = (d: any) => {
+    const late: TeamTimes = {}, auto: TeamTimes = {}, noshow: TeamTimes = {};
+    for (const t of LATE_TEAMS) {
+      late[t.key] = toTimeInput(d.lateRules[t.key] ?? d.lateRules.default);
+      const a = d.schedule.autoClockOut[t.key];
+      auto[t.key] = a === null || a === undefined ? '' : toTimeInput(a);
+      const n = d.schedule.noShowAt[t.key];
+      noshow[t.key] = n === null || n === undefined ? '' : toTimeInput(n);
+    }
+    const limits: { [k: string]: string } = {};
+    for (const k of Object.keys(d.schedule.alertLimits)) limits[k] = String(d.schedule.alertLimits[k]);
+    const next = { late, auto, noshow, limits };
+    setForm(next);
+    setSavedForm(JSON.parse(JSON.stringify(next)));
+    if (d.teamLeadAlerts !== undefined) setAlertsConnected(!!d.teamLeadAlerts);
   };
 
   useEffect(() => {
-    api<{ lateRules: { [team: string]: number } }>('/settings')
-      .then(d => d.lateRules && applyLateRules(d.lateRules))
-      .catch(() => setLateRules(null));
+    api('/settings').then(applySettings).catch(() => setForm(null));
   }, []);
 
-  const saveLateRules = async () => {
-    if (!lateRules) return;
-    const body: { [team: string]: number } = {};
+  const scheduleDirty = !!form && JSON.stringify(form) !== JSON.stringify(savedForm);
+
+  const saveSchedule = async () => {
+    if (!form || !savedForm) return;
+    const lateRules: { [team: string]: number } = {};
+    const autoClockOut: { [team: string]: number | null } = {};
+    const noShowAt: { [team: string]: number | null } = {};
     for (const t of LATE_TEAMS) {
-      const m = fromTimeInput(lateRules[t.key]);
-      if (m === null) return showMessage(`Enter a time for ${t.label}`, 'error');
-      body[t.key] = m;
+      const late = fromTimeInput(form.late[t.key]);
+      if (late === null) return showMessage(`Enter a late time for ${t.label}`, 'error');
+      lateRules[t.key] = late;
+      const auto = form.auto[t.key] ? fromTimeInput(form.auto[t.key]) : null;
+      if (auto === null && (t.key === 'default' || form.auto[t.key])) return showMessage(`Enter an auto clock-out time for ${t.label}`, 'error');
+      autoClockOut[t.key] = auto;
+      noShowAt[t.key] = form.noshow[t.key] ? fromTimeInput(form.noshow[t.key]) : null;
     }
-    setSavingLate(true);
+    const alertLimits: { [k: string]: number } = {};
+    for (const [k, v] of Object.entries(form.limits)) {
+      const n = parseInt(v, 10);
+      if (!Number.isInteger(n) || n < 1) return showMessage('Alert limits must be at least 1 minute', 'error');
+      alertLimits[k] = n;
+    }
+    const body: any = { schedule: { autoClockOut, noShowAt, alertLimits } };
+    // Only send late rules when they changed (each save starts a new dated rule)
+    if (JSON.stringify(form.late) !== JSON.stringify(savedForm.late)) body.lateRules = lateRules;
+    setSavingSchedule(true);
     try {
-      const d = await api<{ lateRules: { [team: string]: number } }>('/settings', { method: 'POST', body: JSON.stringify({ lateRules: body }) });
-      applyLateRules(d.lateRules);
-      showMessage('Late times saved. They apply from today; earlier days keep their old rules.', 'success');
+      applySettings(await api('/settings', { method: 'POST', body: JSON.stringify(body) }));
+      showMessage(body.lateRules ? 'Schedule saved. New late times apply from today.' : 'Schedule saved', 'success');
     } catch (e: any) {
       showMessage(e.message, 'error');
     } finally {
-      setSavingLate(false);
+      setSavingSchedule(false);
     }
   };
-  const lateDirty = !!lateRules && JSON.stringify(lateRules) !== JSON.stringify(savedLateRules);
+
+  const saveWebhook = async (url: string) => {
+    setWebhookBusy(true);
+    try {
+      const d = await api<{ teamLeadAlerts: boolean }>('/settings', { method: 'POST', body: JSON.stringify({ teamLeadWebhook: url }) });
+      setAlertsConnected(d.teamLeadAlerts);
+      setWebhookInput('');
+      showMessage(url ? 'Team lead channel connected' : 'Team lead alerts turned off', 'success');
+    } catch (e: any) {
+      showMessage(e.message, 'error');
+    } finally {
+      setWebhookBusy(false);
+    }
+  };
+
+  const sendTestAlert = async () => {
+    try {
+      await api('/admin/test-alert', { method: 'POST' });
+      showMessage('Test alert sent. Check the team lead channel.', 'success');
+    } catch (e: any) {
+      showMessage(e.message, 'error');
+    }
+  };
+
+  const setTeam = (field: 'late' | 'auto' | 'noshow', team: string, value: string) =>
+    form && setForm({ ...form, [field]: { ...form[field], [team]: value } });
 
   const loadAdmins = () => api<any[]>('/get-users', { method: 'POST' })
     .then(users => {
@@ -152,37 +206,112 @@ const SettingsView: React.FC<SettingsViewProps> = ({ theme, onThemeChange, showM
       <section className="card">
         <div className="card-head">
           <div>
-            <h2>Start times & late rules</h2>
-            <p className="muted">A first clock-in after this time is marked late. Changes apply from today; past days keep the rules they were worked under.</p>
+            <h2>Team schedule</h2>
+            <p className="muted">All times Pacific. Late rule changes apply from today; past days keep the rules they were worked under.</p>
           </div>
-          <button className="btn btn-primary" disabled={!lateDirty || savingLate} onClick={saveLateRules}>
-            {savingLate ? 'Saving…' : 'Save'}
+          <button className="btn btn-primary" disabled={!scheduleDirty || savingSchedule} onClick={saveSchedule}>
+            {savingSchedule ? 'Saving…' : 'Save'}
           </button>
         </div>
-        {!lateRules ? <div className="skeleton" style={{ height: 80 }} /> : (
-          <div className="late-grid">
-            {LATE_TEAMS.map(t => (
-              <label key={t.key} className="field late-field">
-                <span>{t.label}</span>
-                <input
-                  type="time"
-                  step={300}
-                  value={lateRules[t.key]}
-                  onChange={e => setLateRules({ ...lateRules, [t.key]: e.target.value })}
-                />
-                <span className="muted small">Late after {lateRules[t.key] ? new Date(`2000-01-01T${lateRules[t.key]}`).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }) : '—'} PT</span>
-              </label>
-            ))}
+        {!form ? <div className="skeleton" style={{ height: 120 }} /> : (
+          <div className="table-wrap schedule-wrap">
+            <table className="table schedule-table">
+              <thead>
+                <tr>
+                  <th>Team</th>
+                  <th>Late after</th>
+                  <th>“Possibly absent” alert</th>
+                  <th>Auto clock-out</th>
+                </tr>
+              </thead>
+              <tbody>
+                {LATE_TEAMS.map(t => (
+                  <tr key={t.key}>
+                    <td className="strong">{t.label}</td>
+                    <td><input type="time" step={300} value={form.late[t.key]} onChange={e => setTeam('late', t.key, e.target.value)} /></td>
+                    <td>
+                      <div className="time-or-off">
+                        <input type="time" step={300} value={form.noshow[t.key]} onChange={e => setTeam('noshow', t.key, e.target.value)} />
+                        {form.noshow[t.key]
+                          ? <button className="link-btn" onClick={() => setTeam('noshow', t.key, '')}>Turn off</button>
+                          : <span className="muted small">Off</span>}
+                      </div>
+                    </td>
+                    <td>
+                      <div className="time-or-off">
+                        <input type="time" step={300} value={form.auto[t.key]} onChange={e => setTeam('auto', t.key, e.target.value)} />
+                        {t.key !== 'default' && (form.auto[t.key]
+                          ? <button className="link-btn" onClick={() => setTeam('auto', t.key, '')}>Turn off</button>
+                          : <span className="muted small">Off</span>)}
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         )}
+        <p className="muted small schedule-note">
+          “Possibly absent” alerts post to the team lead channel on weekdays, listing anyone on that team who hasn’t clocked in yet.
+          Auto clock-out clocks out anyone still on the clock (including on break) at their team’s time, with a note in Discord.
+        </p>
+      </section>
+
+      <section className="card">
+        <div className="card-head">
+          <div>
+            <h2>Team lead alerts</h2>
+            <p className="muted">Discord messages for long breaks, long IT issues and morning no-shows.</p>
+          </div>
+          <span className={`badge ${alertsConnected ? 'badge-live' : ''}`}>{alertsConnected ? 'Connected' : 'Not connected'}</span>
+        </div>
+        <div className="alerts-grid">
+          <div className="field">
+            <span>Team lead channel webhook</span>
+            <div className="field-row">
+              <input
+                type="url"
+                value={webhookInput}
+                onChange={e => setWebhookInput(e.target.value)}
+                placeholder={alertsConnected ? 'Connected. Paste a new URL to replace it' : 'https://discord.com/api/webhooks/…'}
+              />
+              <button className="btn btn-primary" disabled={!webhookInput.trim() || webhookBusy} onClick={() => saveWebhook(webhookInput.trim())}>
+                {alertsConnected ? 'Replace' : 'Connect'}
+              </button>
+            </div>
+            <span className="muted small">In Discord: team lead channel → ⚙️ Edit Channel → Integrations → Webhooks → New Webhook → Copy Webhook URL.</span>
+            <div className="card-actions">
+              <button className="btn btn-ghost btn-sm" disabled={!alertsConnected} onClick={sendTestAlert}>Send test alert</button>
+              {alertsConnected && <button className="btn btn-ghost btn-sm" disabled={webhookBusy} onClick={() => saveWebhook('')}>Turn off</button>}
+            </div>
+          </div>
+          {form && (
+            <div className="field">
+              <span>Alert when longer than (minutes)</span>
+              <div className="limit-grid">
+                {[['break', '☕ Break'], ['lunch', '🍔 Lunch'], ['restroom', '🚻 Restroom'], ['itIssue', '💻 IT issue']].map(([k, label]) => (
+                  <label key={k} className="limit-field">
+                    <span>{label}</span>
+                    <input
+                      inputMode="numeric"
+                      value={form.limits[k] ?? ''}
+                      onChange={e => setForm({ ...form, limits: { ...form.limits, [k]: e.target.value.replace(/\D/g, '').slice(0, 3) } })}
+                    />
+                  </label>
+                ))}
+              </div>
+              <span className="muted small">Saved with the team schedule. These limits also drive “Needs attention” on the Today screen.</span>
+            </div>
+          )}
+        </div>
       </section>
 
       <div className="settings-grid">
         <section className="card">
           <div className="card-head"><h2>Auto clock-out</h2></div>
-          <p>Everyone still on the clock is clocked out automatically at <strong>4:30 PM Pacific</strong> every day, with a note in Discord.</p>
+          <p>Each team is clocked out automatically at its time in the <strong>Team schedule</strong> above, with a note in Discord.</p>
           <p className="muted small">Clock-in is open 5:45 AM – 4:00 PM Pacific.</p>
-          <button className="btn btn-ghost" onClick={runAutoClockOut}>Run auto clock-out now</button>
+          <button className="btn btn-ghost" onClick={runAutoClockOut}>Clock out everyone now</button>
         </section>
 
         <section className="card">
