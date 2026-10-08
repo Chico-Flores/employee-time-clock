@@ -740,7 +740,8 @@ app.get('/', (req, res) => {
 
 // NEW ROUTE: Get current PST time
 app.get('/get-pst-time', (req, res) => {
-    res.json({ time: getPSTTime() });
+    // epoch lets kiosks correct for a PC clock or time zone that is set wrong
+    res.json({ time: getPSTTime(), epoch: Date.now() });
 });
 
 // Route to get records - ADMIN ONLY
@@ -857,6 +858,9 @@ app.post('/download-records', requireAdmin, async (req, res) => {
 });
 
 // Route to add record
+const CLOCK_IN_OPENS = 5 * 60 + 45; // 5:45 AM PST
+const CLOCK_IN_CLOSES = 16 * 60;     // 4:00 PM PST
+
 app.post('/add-record', async (req, res) => {
     const { pin, action } = req.body;
 
@@ -900,6 +904,13 @@ app.post('/add-record', async (req, res) => {
 
         // Time and IP come from the server, not the browser
         const time = getPSTTime();
+        // Check the clock-in window on the server's clock. A kiosk PC with the
+        // wrong time zone must not be able to block (or allow) a clock-in.
+        if (action === 'ClockIn') {
+            const nowMin = parseRecordTime(time).minutes;
+            if (nowMin < CLOCK_IN_OPENS) return res.status(400).json({ error: 'Clock-in opens at 5:45 AM Pacific.' });
+            if (nowMin >= CLOCK_IN_CLOSES) return res.status(400).json({ error: 'Clock-in is closed after 4:00 PM Pacific.' });
+        }
         const ip = getClientIp(req);
         const name = user.name;
         const record = { name, pin, action, time, ip };

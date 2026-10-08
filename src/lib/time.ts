@@ -36,11 +36,34 @@ export const fmtDuration = (minutes: number | null | undefined): string => {
 
 export const fmtHours = (minutes: number): string => (minutes / 60).toFixed(1);
 
+// Difference between the server's clock and this PC's clock. Some kiosk PCs
+// have the wrong time or time zone set, so all "now" checks use server time.
+let clockOffsetMs = 0;
+export const serverNow = (): Date => new Date(Date.now() + clockOffsetMs);
+
+export const syncClock = async (): Promise<void> => {
+  try {
+    const sent = Date.now();
+    const res = await fetch('/get-pst-time', { cache: 'no-store' });
+    const { epoch } = await res.json();
+    if (typeof epoch === 'number') {
+      const received = Date.now();
+      clockOffsetMs = epoch - (sent + received) / 2;
+    }
+  } catch {
+    // offline: keep the last known offset
+  }
+};
+
+// Current wall-clock time in Pacific, as a Date whose local fields read PST
+export const pstNow = (): Date =>
+  new Date(serverNow().toLocaleString('en-US', { timeZone: 'America/Los_Angeles' }));
+
 // Current PST date as YYYY-MM-DD
 export const todayIso = (): string => {
   const parts = new Intl.DateTimeFormat('en-US', {
     timeZone: 'America/Los_Angeles', year: 'numeric', month: '2-digit', day: '2-digit'
-  }).formatToParts(new Date());
+  }).formatToParts(serverNow());
   const get = (t: string) => parts.find(p => p.type === t)?.value;
   return `${get('year')}-${get('month')}-${get('day')}`;
 };

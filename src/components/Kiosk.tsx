@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import Keypad from './Keypad';
 import HalloweenDecor from './HalloweenDecor';
 import PWAInstaller from './PWAInstaller';
-import { STATUS_META, statusFromAction, fmtClock, fmtDuration, parseRecordTime, todayIso, initials } from '../lib/time';
+import { STATUS_META, statusFromAction, fmtClock, fmtDuration, parseRecordTime, todayIso, initials, pstNow, syncClock } from '../lib/time';
 import { prepareAvatar } from '../lib/image';
 
 type MessageType = 'success' | 'error' | 'warning' | 'info';
@@ -81,7 +81,6 @@ const todayKey = () => {
   return `${m}/${d}/${y}`;
 };
 
-const pstNow = () => new Date(new Date().toLocaleString('en-US', { timeZone: 'America/Los_Angeles' }));
 
 const successText = (action: string, name: string, time: string, halloween: boolean): string => {
   const at = fmtClock(parseRecordTime(time)?.minutes);
@@ -129,7 +128,10 @@ const Kiosk: React.FC<KioskProps> = ({ theme, siteTheme, themePref, onThemePrefC
 
   useEffect(() => {
     const timer = setInterval(() => setClock(pstNow()), 1000);
-    return () => clearInterval(timer);
+    // Use the server's clock in case this PC's time or time zone is wrong
+    syncClock().then(() => setClock(pstNow()));
+    const sync = setInterval(syncClock, 10 * 60 * 1000);
+    return () => { clearInterval(timer); clearInterval(sync); };
   }, []);
 
   useEffect(() => {
