@@ -1,6 +1,6 @@
 // src/components/QuickAdminLogin.tsx
 // NEW FILE - Create this component for PIN-based admin access
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 
 interface QuickAdminLoginProps {
   onLoginSuccess: () => void;
@@ -14,6 +14,7 @@ const QuickAdminLogin: React.FC<QuickAdminLoginProps> = ({
   const [pin, setPin] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
 
   const handlePinChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value.replace(/\D/g, '');
@@ -50,6 +51,9 @@ const QuickAdminLogin: React.FC<QuickAdminLoginProps> = ({
       }
     } catch (err: any) {
       setError(err.message || 'Invalid PIN or not authorized for admin access');
+      // Clear the digits so the PIN can be retyped from scratch
+      setPin('');
+      setTimeout(() => inputRef.current?.focus(), 0);
     } finally {
       setLoading(false);
     }
@@ -91,6 +95,7 @@ const QuickAdminLogin: React.FC<QuickAdminLoginProps> = ({
         <input
           type="text"
           placeholder="4-digit PIN"
+          ref={inputRef}
           value={pin}
           onChange={handlePinChange}
           onKeyPress={handleKeyPress}
