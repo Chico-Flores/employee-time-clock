@@ -213,7 +213,53 @@ async function findAgentByPin(req, res) {
 // ---------- Time sheet helpers ----------
 // Records store time as a PST wall-clock string: "MM/DD/YYYY, hh:mm:ss AM"
 
-const LATE_AFTER_MINUTES = 7 * 60 + 10; // clock-ins after 7:10 AM PST are late
+const LATE_AFTER_MINUTES = 7 * 60 + 10; // fallback: clock-ins after 7:10 AM PST are late
+
+// ---------- Late rules (per team, effective from a date) ----------
+// Each entry applies from its `from` date (YYYY-MM-DD, Pacific) until the next entry,
+// so changing a team's start time never rewrites past reports.
+const LATE_LOCATIONS = ['PH', 'EG', 'TJ', 'RS'];
+const DEFAULT_LATE_HISTORY = [
+    { from: '0000-01-01', rules: { default: LATE_AFTER_MINUTES } },
+    // Overseas teams start at 6:30 AM from Oct 8, 2026 -> late after 6:40 AM
+    { from: '2026-10-08', rules: { PH: 6 * 60 + 40, EG: 6 * 60 + 40, default: LATE_AFTER_MINUTES } }
+];
+let lateHistory = DEFAULT_LATE_HISTORY;
+
+function locationOfTags(tags = []) {
+    if (tags.includes('MX')) return 'TJ';
+    return LATE_LOCATIONS.find(t => tags.includes(t)) || null;
+}
+
+function dateKeyToIso(dateKey) {
+    const [m, d, y] = dateKey.split('/');
+    return `${y}-${m}-${d}`;
+}
+
+function lateRulesOn(isoDate) {
+    let entry = lateHistory[0];
+    for (const e of lateHistory) if (e.from <= isoDate) entry = e;
+    return entry.rules;
+}
+
+// Minutes after midnight PST after which a first clock-in counts as late
+function lateAfterFor(tags, dateKey) {
+    const rules = lateRulesOn(dateKeyToIso(dateKey));
+    const loc = locationOfTags(tags);
+    return (loc && rules[loc] !== undefined ? rules[loc] : rules.default) ?? LATE_AFTER_MINUTES;
+}
+
+function currentLateRules(isoToday) {
+    const rules = lateRulesOn(isoToday);
+    const out = { default: rules.default ?? LATE_AFTER_MINUTES };
+    for (const loc of LATE_LOCATIONS) out[loc] = rules[loc] ?? out.default;
+    return out;
+}
+
+async function loadSettings() {
+    const doc = await getDB().collection('settings').findOne({ _id: 'app' });
+    if (doc && Array.isArray(doc.lateHistory) && doc.lateHistory.length) lateHistory = doc.lateHistory;
+}
 const BREAK_TYPES = { StartBreak: 'break', StartLunch: 'lunch', StartRestroom: 'restroom', StartMeeting: 'meeting', StartItIssue: 'itIssue' };
 
 function parseRecordTime(str) {
@@ -262,7 +308,7 @@ function dateKeyRegex(dateKey) {
 
 // Totals for one employee's records on one day (records in insertion order).
 // endMinutes: "now" for today, so open segments count up to the current time.
-function summarizeDay(events, endMinutes) {
+function summarizeDay(events, endMinutes, lateAfter = LATE_AFTER_MINUTES) {
     const totals = { worked: 0, break: 0, lunch: 0, restroom: 0, meeting: 0, itIssue: 0 };
     let workStart = null, pauseStart = null, pauseType = null;
     let firstIn = null, lastOut = null, absent = false, lastMinutes = null;
@@ -305,7 +351,8 @@ function summarizeDay(events, endMinutes) {
     return {
         firstIn: firstIn !== null ? Math.round(firstIn) : null,
         lastOut: lastOut !== null ? Math.round(lastOut) : null,
-        late: firstIn !== null && firstIn > LATE_AFTER_MINUTES,
+        late: firstIn !== null && firstIn > lateAfter,
+        lateAfter,
         absent,
         openAtEnd: workStart !== null || pauseStart !== null,
         totals
@@ -599,12 +646,27 @@ app.post('/employee-status', async (req, res) => {
         const now = parseRecordTime(getPSTTime());
         const todays = await db.collection('records')
             .find({ pin, time: dateKeyRegex(now.dateKey) }).sort({ _id: 1 }).toArray();
-        const day = summarizeDay(todays, now.minutes);
+        const lateAfter = lateAfterFor(user.tags, now.dateKey);
+        const day = summarizeDay(todays, now.minutes, lateAfter);
+
+        // This week (Monday to today, Pacific) as a personal reference
+        const todayIso = dateKeyToIso(now.dateKey);
+        const weekday = new Date(`${todayIso}T12:00:00Z`).getUTCDay();
+        const weekKeys = dateKeysInRange(shiftIsoDays(todayIso, -((weekday + 6) % 7)), todayIso);
+        const week = (await getHours(weekKeys, { pins: [pin] })).employees[0];
+
         res.json({
             name: user.name,
             action: lastRecord ? lastRecord.action : null,
             time: lastRecord ? lastRecord.time : null,
-            today: { firstIn: day.firstIn, worked: day.totals.worked, late: day.late },
+            today: { firstIn: day.firstIn, worked: day.totals.worked, itIssue: day.totals.itIssue, late: day.late },
+            week: week ? {
+                worked: week.workedMinutes,
+                itIssue: week.itIssueMinutes,
+                daysWorked: week.daysWorked,
+                lateDays: week.lateDays
+            } : null,
+            lateAfter,
             avatarUrl: avatarPath(user),
             themePref: user.themePref || null
         });
@@ -1197,20 +1259,46 @@ const THEMES = ['default', 'halloween'];
 app.get('/settings', async (req, res) => {
     try {
         const doc = await getDB().collection('settings').findOne({ _id: 'app' });
-        res.json({ theme: doc?.theme || 'default', themes: THEMES });
+        res.json({ theme: doc?.theme || 'default', themes: THEMES, lateRules: currentLateRules(todayIsoPst()) });
     } catch (error) {
         res.status(500).json({ error: error.message });
     }
 });
 
+// Body: { theme } and/or { lateRules: { PH: minutes, EG: ..., TJ: ..., RS: ..., default: ... } }
 app.post('/settings', requireAdmin, async (req, res) => {
-    const { theme } = req.body;
-    if (!THEMES.includes(theme)) {
-        return res.status(400).json({ error: 'Unknown theme' });
+    const { theme, lateRules } = req.body;
+    const update = {};
+
+    if (theme !== undefined) {
+        if (!THEMES.includes(theme)) return res.status(400).json({ error: 'Unknown theme' });
+        update.theme = theme;
     }
+
+    if (lateRules !== undefined) {
+        const rules = {};
+        for (const key of [...LATE_LOCATIONS, 'default']) {
+            const v = lateRules[key];
+            if (v === undefined) continue;
+            if (!Number.isInteger(v) || v < 0 || v >= 24 * 60) {
+                return res.status(400).json({ error: `Invalid late time for ${key}` });
+            }
+            rules[key] = v;
+        }
+        if (rules.default === undefined) rules.default = currentLateRules(todayIsoPst()).default;
+        // New rules take effect today; earlier days keep the rules they were worked under
+        const today = todayIsoPst();
+        const history = lateHistory.filter(e => e.from < today);
+        history.push({ from: today, rules });
+        update.lateHistory = history;
+    }
+
+    if (!Object.keys(update).length) return res.status(400).json({ error: 'Nothing to update' });
+
     try {
-        await getDB().collection('settings').updateOne({ _id: 'app' }, { $set: { theme } }, { upsert: true });
-        res.json({ theme });
+        await getDB().collection('settings').updateOne({ _id: 'app' }, { $set: update }, { upsert: true });
+        if (update.lateHistory) lateHistory = update.lateHistory;
+        res.json({ theme: update.theme, lateRules: currentLateRules(todayIsoPst()) });
     } catch (error) {
         res.status(500).json({ error: error.message });
     }
@@ -1246,7 +1334,7 @@ async function buildDay(db, dateKey, endMinutes) {
         .filter(e => e.active !== false || byPin[e.pin])
         .map(e => ({
             ...employeeInfo(e),
-            ...summarizeDay(byPin[e.pin] || [], endMinutes),
+            ...summarizeDay(byPin[e.pin] || [], endMinutes, lateAfterFor(e.tags, dateKey)),
             events: (byPin[e.pin] || []).map(publicRecord)
         }));
     return { rows, records };
@@ -1308,12 +1396,13 @@ async function getHours(keys, { pins = null, perDay = false } = {}) {
 
     const rows = employees.map(e => {
         const row = { ...employeeInfo(e),
-            daysWorked: 0, workedMinutes: 0, breakMinutes: 0, lunchMinutes: 0, lateDays: 0, absentDays: 0, missingClockOuts: 0 };
+            daysWorked: 0, workedMinutes: 0, breakMinutes: 0, lunchMinutes: 0, meetingMinutes: 0, itIssueMinutes: 0,
+            lateDays: 0, absentDays: 0, missingClockOuts: 0 };
         if (perDay) row.days = [];
         for (const key of keys) {
             const events = byPinDay[e.pin + '|' + key];
             if (!events) continue;
-            const day = summarizeDay(events, key === nowParsed.dateKey ? nowParsed.minutes : null);
+            const day = summarizeDay(events, key === nowParsed.dateKey ? nowParsed.minutes : null, lateAfterFor(e.tags, key));
             if (day.absent) row.absentDays++;
             if (day.firstIn !== null) row.daysWorked++;
             if (day.late) row.lateDays++;
@@ -1321,6 +1410,8 @@ async function getHours(keys, { pins = null, perDay = false } = {}) {
             row.workedMinutes += day.totals.worked;
             row.breakMinutes += day.totals.break + day.totals.restroom;
             row.lunchMinutes += day.totals.lunch;
+            row.meetingMinutes += day.totals.meeting;
+            row.itIssueMinutes += day.totals.itIssue;
             if (perDay) row.days.push({ date: key, ...day });
         }
         return row;
@@ -1443,7 +1534,7 @@ app.post('/cron/auto-clockout', async (req, res) => {
 });
 
 // Start server after DB connection
-connectDB().then(() => {
+connectDB().then(loadSettings).then(() => {
     app.listen(PORT, '0.0.0.0', () => {
         console.log(`✅ Server running on port ${PORT}`);
         console.log(`🕐 Server time zone: PST (America/Los_Angeles)`);

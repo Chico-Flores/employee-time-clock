@@ -249,6 +249,19 @@ html[data-theme='halloween'][data-view='kiosk'] .toast {
 .kiosk-today { color: var(--k-muted); font-size: 14px; }
 .kiosk-today strong { color: var(--k-text); }
 
+.kiosk-week {
+  border: 1px solid var(--k-panel-border);
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 16px;
+  padding: 10px 14px 12px;
+}
+.kiosk-week-title { font-size: 12px; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; color: var(--k-highlight); }
+.kiosk-week-title span { font-weight: 600; letter-spacing: 0; text-transform: none; color: var(--k-muted); margin-left: 6px; }
+.kiosk-week-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 8px; }
+.kiosk-week-stats div { display: flex; flex-direction: column; }
+.kiosk-week-stats strong { font-size: 18px; font-weight: 800; font-variant-numeric: tabular-nums; }
+.kiosk-week-stats span { font-size: 12px; color: var(--k-muted); }
+
 .kiosk-primary {
   width: 100%;
   min-height: 68px;
@@ -891,6 +904,10 @@ html[data-theme='halloween'] .kiosk-card { box-shadow: 0 30px 80px rgba(0, 0, 0,
 .theme-card-body { display: flex; flex-direction: column; gap: 4px; padding: 12px 14px 14px; }
 .theme-card-title { display: flex; align-items: center; gap: 8px; font-weight: 800; }
 .theme-card-title .badge { margin-left: 0; }
+
+.late-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 14px; }
+.late-field { background: #f8fafc; border: 1px solid var(--a-border); border-radius: 12px; padding: 12px; }
+.late-field input { font-size: 16px; font-weight: 700; }
 
 /* Modal */
 .modal-backdrop { position: fixed; inset: 0; background: rgba(15, 23, 42, 0.45); backdrop-filter: blur(4px); display: flex; align-items: center; justify-content: center; z-index: 1500; padding: 16px; animation: fadeIn 0.2s ease; }

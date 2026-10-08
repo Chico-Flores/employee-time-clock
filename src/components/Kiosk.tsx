@@ -26,6 +26,8 @@ interface Employee {
   todayWorked: number;
   firstIn: number | null;
   avatarUrl: string | null;
+  lateAfter: number;
+  week: { worked: number; itIssue: number; daysWorked: number; lateDays: number } | null;
 }
 
 // Which action may follow the employee's last action (null = no records yet)
@@ -63,7 +65,7 @@ const SECONDARY_ACTIONS = [
 
 const EARLIEST_CLOCK_IN = 5 * 60 + 45; // 5:45 AM PST
 const LATEST_CLOCK_IN = 16 * 60;       // 4:00 PM PST
-const LATE_AFTER = 7 * 60 + 10;        // 7:10 AM PST
+const DEFAULT_LATE_AFTER = 7 * 60 + 10; // fallback; the server sends each agent's team rule
 
 const todayKey = () => {
   const [y, m, d] = todayIso().split('-');
@@ -165,6 +167,8 @@ const Kiosk: React.FC<KioskProps> = ({ theme, siteTheme, themePref, onThemePrefC
           since: last && last.dateKey === todayKey() ? last.minutes : null,
           todayWorked: data.today?.worked || 0,
           firstIn: data.today?.firstIn ?? null,
+          lateAfter: data.lateAfter ?? DEFAULT_LATE_AFTER,
+          week: data.week || null,
           avatarUrl: data.avatarUrl || null
         });
         setLookupState('idle');
@@ -280,8 +284,8 @@ const Kiosk: React.FC<KioskProps> = ({ theme, siteTheme, themePref, onThemePrefC
         showMessage('Clock-in is closed after 4:00 PM Pacific.', 'error');
         return;
       }
-      if (minutes > LATE_AFTER) {
-        showMessage('⚠️ Late clock-in recorded (after 7:10 AM).', 'warning');
+      if (minutes > employee.lateAfter) {
+        showMessage(`⚠️ Late clock-in recorded (after ${fmtClock(employee.lateAfter)}).`, 'warning');
       }
     }
     if (action === 'ClockOut' && !window.confirm(`Clock out for the day, ${employee.name}?`)) {
@@ -461,6 +465,17 @@ const Kiosk: React.FC<KioskProps> = ({ theme, siteTheme, themePref, onThemePrefC
                 <div className="kiosk-today">
                   In at <strong>{fmtClock(employee.firstIn)}</strong>
                   {employee.todayWorked > 0 && <> · <strong>{fmtDuration(employee.todayWorked)}</strong> on the clock today</>}
+                </div>
+              )}
+
+              {employee.week && employee.week.daysWorked > 0 && (
+                <div className="kiosk-week" title="For your reference only. Pay is based on dialer login time.">
+                  <div className="kiosk-week-title">This week <span>Mon – today · reference only</span></div>
+                  <div className="kiosk-week-stats">
+                    <div><strong>{fmtDuration(employee.week.worked)}</strong><span>on the clock</span></div>
+                    <div><strong>{employee.week.daysWorked}</strong><span>{employee.week.daysWorked === 1 ? 'day' : 'days'}</span></div>
+                    <div><strong>{fmtDuration(employee.week.itIssue)}</strong><span>IT issues</span></div>
+                  </div>
                 </div>
               )}
 
