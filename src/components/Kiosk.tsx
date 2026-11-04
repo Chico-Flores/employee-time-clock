@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import Keypad from './Keypad';
 import HalloweenDecor from './HalloweenDecor';
+import ThanksgivingDecor from './ThanksgivingDecor';
 import PWAInstaller from './PWAInstaller';
 import { STATUS_META, statusFromAction, fmtClock, fmtDuration, parseRecordTime, todayIso, initials, pstNow, syncClock } from '../lib/time';
 import { prepareAvatar } from '../lib/image';
@@ -82,31 +83,83 @@ const todayKey = () => {
 };
 
 
-const successText = (action: string, name: string, time: string, halloween: boolean): string => {
+// Days from today (Pacific) until the given month/day this year
+const daysUntil = (month: number, day: number): number => {
+  const now = pstNow();
+  const target = new Date(now.getFullYear(), month, day);
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  return Math.round((target.getTime() - today.getTime()) / 86400000);
+};
+
+// US Thanksgiving: the fourth Thursday of November
+const thanksgivingDay = (): number => {
+  const firstWeekday = new Date(pstNow().getFullYear(), 10, 1).getDay();
+  return 1 + ((4 - firstWeekday + 7) % 7) + 21;
+};
+
+interface Holiday {
+  name: string;
+  icon: string;
+  hello: string;
+  clockIn: string;
+  clockOut: string;
+  title: string;
+  subtitle: () => string;
+  messages: (at: string, name: string) => { [action: string]: string };
+  Decor: React.FC;
+}
+
+const HOLIDAYS: { [theme: string]: Holiday } = {
+  halloween: {
+    name: 'Halloween',
+    icon: '🎃',
+    hello: 'Boo! Welcome,',
+    clockIn: '🎃 Clock in',
+    clockOut: '👻 Clock out for the day',
+    title: 'Happy Halloween',
+    subtitle: () => {
+      const days = daysUntil(9, 31);
+      return days > 1 ? `${days} days until Halloween 🎃` : days === 1 ? 'Halloween is tomorrow! 🦇' : days === 0 ? 'Trick or treat! 👻' : 'Thanks for a spooky season 👻';
+    },
+    messages: (at, name) => ({
+      ClockIn: `🎃 Clocked in at ${at}. Have a spooktacular shift, ${name}!`,
+      ClockOut: `👻 Clocked out at ${at}. Great work, ${name}. Rest up!`,
+      StartLunch: `🍬 Enjoy your lunch, ${name}. No tricks, just treats!`,
+      StartBreak: `🦇 Break started at ${at}. Back soon!`
+    }),
+    Decor: HalloweenDecor
+  },
+  thanksgiving: {
+    name: 'Thanksgiving',
+    icon: '🦃',
+    hello: 'Happy Thanksgiving,',
+    clockIn: '🦃 Clock in',
+    clockOut: '🍂 Clock out for the day',
+    title: 'Happy Thanksgiving',
+    subtitle: () => {
+      const days = daysUntil(10, thanksgivingDay());
+      return days > 1 ? `${days} days until Thanksgiving 🦃` : days === 1 ? 'Thanksgiving is tomorrow! 🥧' : days === 0 ? 'Happy Thanksgiving! 🦃' : 'Grateful for you, every day 🍂';
+    },
+    messages: (at, name) => ({
+      ClockIn: `🦃 Clocked in at ${at}. We're thankful for you, ${name}!`,
+      ClockOut: `🍂 Clocked out at ${at}. Thanks for all your hard work, ${name}!`,
+      StartLunch: `🥧 Enjoy your lunch, ${name}. Save room for pie!`,
+      StartBreak: `☕ Break started at ${at}. Back soon!`
+    }),
+    Decor: ThanksgivingDecor
+  }
+};
+
+const successText = (action: string, name: string, time: string, holiday?: Holiday): string => {
   const at = fmtClock(parseRecordTime(time)?.minutes);
-  const spooky: { [a: string]: string } = {
-    ClockIn: `🎃 Clocked in at ${at}. Have a spooktacular shift, ${name}!`,
-    ClockOut: `👻 Clocked out at ${at}. Great work, ${name}. Rest up!`,
-    StartLunch: `🍬 Enjoy your lunch, ${name}. No tricks, just treats!`,
-    StartBreak: `🦇 Break started at ${at}. Back soon!`
-  };
   const normal: { [a: string]: string } = {
     ClockIn: `Clocked in at ${at}. Have a great shift, ${name}!`,
     ClockOut: `Clocked out at ${at}. Great work today, ${name}!`,
     StartLunch: `Lunch started at ${at}. Enjoy!`,
     StartBreak: `Break started at ${at}.`
   };
-  return (halloween ? spooky[action] : undefined) || normal[action] || `Recorded at ${at}.`;
+  return holiday?.messages(at, name)[action] || normal[action] || `Recorded at ${at}.`;
 };
-
-const daysUntilHalloween = (): number => {
-  const now = pstNow();
-  const halloween = new Date(now.getFullYear(), 9, 31);
-  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  return Math.round((halloween.getTime() - today.getTime()) / 86400000);
-};
-
-const THEME_NAMES: { [theme: string]: string } = { halloween: 'Halloween' };
 
 const Kiosk: React.FC<KioskProps> = ({ theme, siteTheme, themePref, onThemePrefChange, isAdmin, onOpenAdmin, showMessage }) => {
   const [pin, setPin] = useState('');
@@ -124,7 +177,7 @@ const Kiosk: React.FC<KioskProps> = ({ theme, siteTheme, themePref, onThemePrefC
   const fileRef = useRef<HTMLInputElement>(null);
   const themePrefRef = useRef(themePref);
   themePrefRef.current = themePref;
-  const halloween = theme === 'halloween';
+  const holiday: Holiday | undefined = HOLIDAYS[theme];
 
   useEffect(() => {
     const timer = setInterval(() => setClock(pstNow()), 1000);
@@ -217,7 +270,7 @@ const Kiosk: React.FC<KioskProps> = ({ theme, siteTheme, themePref, onThemePrefC
     if (employee) savePref(next);
     showMessage(next === 'classic'
       ? 'Holiday theme turned off. Showing the standard look.'
-      : `${THEME_NAMES[siteTheme] || 'Holiday'} theme turned on.`, 'info');
+      : `${HOLIDAYS[siteTheme]?.name || 'Holiday'} theme turned on.`, 'info');
   };
 
   const uploadPhoto = async (file: File | undefined) => {
@@ -343,7 +396,7 @@ const Kiosk: React.FC<KioskProps> = ({ theme, siteTheme, themePref, onThemePrefC
       if (rememberPin) {
         try { localStorage.setItem('rememberedPin', pin); } catch { /* ignore */ }
       }
-      showMessage(successText(action, employee.name, data.time, halloween), 'success');
+      showMessage(successText(action, employee.name, data.time, holiday), 'success');
     } catch (error: any) {
       showMessage(error.message, 'error');
     } finally {
@@ -379,11 +432,10 @@ const Kiosk: React.FC<KioskProps> = ({ theme, siteTheme, themePref, onThemePrefC
 
   const nowMinutes = clock.getHours() * 60 + clock.getMinutes();
   const statusMeta = STATUS_META[status];
-  const days = daysUntilHalloween();
 
   return (
     <div className="kiosk" ref={containerRef} tabIndex={-1}>
-      {halloween && <HalloweenDecor />}
+      {holiday && <holiday.Decor />}
 
       <header className="kiosk-header">
         <img
@@ -407,18 +459,16 @@ const Kiosk: React.FC<KioskProps> = ({ theme, siteTheme, themePref, onThemePrefC
               title="Turn the holiday theme on or off for you"
             >
               <span className="theme-toggle-track"><span className="theme-toggle-thumb" /></span>
-              {siteTheme === 'halloween' ? '🎃' : '🎉'} {THEME_NAMES[siteTheme] || 'Holiday'} theme
+              {HOLIDAYS[siteTheme]?.icon || '🎉'} {HOLIDAYS[siteTheme]?.name || 'Holiday'} theme
             </button>
           )}
         </div>
       </header>
 
-      {halloween && (
+      {holiday && (
         <div className="kiosk-holiday-banner">
-          <span className="kiosk-holiday-title">Happy Halloween</span>
-          <span className="kiosk-holiday-sub">
-            {days > 1 ? `${days} days until Halloween 🎃` : days === 1 ? 'Halloween is tomorrow! 🦇' : days === 0 ? 'Trick or treat! 👻' : 'Thanks for a spooky season 👻'}
-          </span>
+          <span className="kiosk-holiday-title">{holiday.title}</span>
+          <span className="kiosk-holiday-sub">{holiday.subtitle()}</span>
         </div>
       )}
 
@@ -447,7 +497,7 @@ const Kiosk: React.FC<KioskProps> = ({ theme, siteTheme, themePref, onThemePrefC
                   onChange={(e) => uploadPhoto(e.target.files?.[0])}
                 />
                 <div className="kiosk-who-text">
-                  <span className="kiosk-hello">{halloween ? 'Boo! Welcome,' : 'Welcome,'}</span>
+                  <span className="kiosk-hello">{holiday ? holiday.hello : 'Welcome,'}</span>
                   <span className="kiosk-name">{employee.name}</span>
                   {!employee.avatarUrl && (
                     <button className="kiosk-photo-hint" onClick={() => fileRef.current?.click()} disabled={uploading}>
@@ -511,7 +561,7 @@ const Kiosk: React.FC<KioskProps> = ({ theme, siteTheme, themePref, onThemePrefC
 
               {canClockIn && (
                 <button className="kiosk-primary" disabled={busy} onClick={() => record('ClockIn')}>
-                  {halloween ? '🎃 Clock in' : '⚡ Clock in'}
+                  {holiday ? holiday.clockIn : '⚡ Clock in'}
                 </button>
               )}
 
@@ -532,7 +582,7 @@ const Kiosk: React.FC<KioskProps> = ({ theme, siteTheme, themePref, onThemePrefC
                     ))}
                   </div>
                   <button className="kiosk-clockout" disabled={busy} onClick={() => record('ClockOut')}>
-                    {halloween ? '👻 Clock out for the day' : 'Clock out for the day'}
+                    {holiday ? holiday.clockOut : 'Clock out for the day'}
                   </button>
                 </>
               )}

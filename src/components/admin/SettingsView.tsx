@@ -14,6 +14,12 @@ const THEMES = [
     name: 'Halloween',
     text: 'Night sky, glowing pumpkins, bats and a countdown to October 31.',
     preview: 'theme-preview-halloween'
+  },
+  {
+    key: 'thanksgiving',
+    name: 'Thanksgiving',
+    text: 'Harvest sunset, falling leaves, a friendly turkey and a countdown to Thanksgiving.',
+    preview: 'theme-preview-thanksgiving'
   }
 ];
 
@@ -181,6 +187,7 @@ const SettingsView: React.FC<SettingsViewProps> = ({ theme, onThemeChange, showM
             <button key={t.key} className={`theme-card ${theme === t.key ? 'selected' : ''}`} onClick={() => chooseTheme(t.key)} disabled={!!saving}>
               <span className={`theme-preview ${t.preview}`}>
                 {t.key === 'halloween' && <span className="theme-preview-emoji">🎃🦇</span>}
+                {t.key === 'thanksgiving' && <span className="theme-preview-emoji">🦃🍂</span>}
                 <span className="theme-preview-keys"><i /><i /><i /><i /><i /><i /></span>
               </span>
               <span className="theme-card-body">

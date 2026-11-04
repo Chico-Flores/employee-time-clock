@@ -61,7 +61,7 @@ const AdminPortal: React.FC<AdminPortalProps> = ({ theme, onThemeChange, onOpenK
     <div className="admin">
       <aside className="admin-side">
         <div className="admin-brand">
-          <span className="admin-brand-mark" aria-hidden="true">{theme === 'halloween' ? '🎃' : '⚡'}</span>
+          <span className="admin-brand-mark" aria-hidden="true">{theme === 'halloween' ? '🎃' : theme === 'thanksgiving' ? '🦃' : '⚡'}</span>
           <div>
             <div className="admin-brand-title">PowerHouze Clock</div>
             <div className="admin-brand-sub">Admin portal</div>
