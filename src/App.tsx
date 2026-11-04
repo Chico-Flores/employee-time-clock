@@ -8,7 +8,7 @@ import './assets/css/app.css';
 
 type MessageType = 'success' | 'error' | 'warning' | 'info';
 
-const THEME_COLORS: { [theme: string]: string } = { default: '#1e40af', halloween: '#1a0b2e' };
+const THEME_COLORS: { [theme: string]: string } = { default: '#1e40af', halloween: '#1a0b2e', thanksgiving: '#24100b' };
 const ADMIN_IDLE_LOGOUT_MS = 30 * 60 * 1000;
 
 // Toasts are appended straight to #message-container so any component can raise one

@@ -88,7 +88,7 @@ const SpiderWeb: React.FC<{ className?: string }> = ({ className }) => {
 };
 
 const HalloweenDecor: React.FC = () => (
-  <div className="halloween-decor" aria-hidden="true">
+  <div className="holiday-decor halloween-decor" aria-hidden="true">
     <div className="hd-stars" />
     <div className="hd-moon" />
     <SpiderWeb className="hd-web" />

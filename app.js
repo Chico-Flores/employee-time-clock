@@ -1435,7 +1435,7 @@ app.post('/admin/test-alert', requireAdmin, async (req, res) => {
 });
 
 // ---------- Settings (holiday theme) ----------
-const THEMES = ['default', 'halloween'];
+const THEMES = ['default', 'halloween', 'thanksgiving'];
 
 app.get('/settings', async (req, res) => {
     try {
